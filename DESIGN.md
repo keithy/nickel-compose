@@ -185,3 +185,40 @@ What's not yet there:
   submodule).
 
 These are the next abstraction bumps.
+
+## The bigger bet: a deployment model, not just a compose tool
+
+If nickel-compose can describe a deployment as a typed record
+and emit valid `compose.yml`, the same record can emit valid
+Kubernetes manifests. Helm charts. Nomad jobs. Anything that
+takes a declarative description of "what should run" and turns
+it into a runtime config.
+
+The premise is the one podman-compose was built on: the same
+mental model ("a pod of containers with volumes and a network")
+describes both Compose and Kubernetes. What changes is the
+output format. What stays is the structure: services,
+volumes, networks, dependencies, env vars, ports.
+
+Concretely, once the merge engine produces a clean `Compose`
+record:
+
+- `nickel compose render config.ncl` → `compose.yml`
+- `nickel k8s render config.ncl` → Deployment + Service + PVC
+  manifests
+- `nickel helm render config.ncl` → `Chart.yaml` + `values.yaml`
+  + `templates/*.yaml`
+
+Each renderer is a Nickel function that walks the same `Compose`
+record. The user's mental model is unchanged. The runtime
+target changes.
+
+This is the durable abstraction: not "a better compose tool"
+but "the level above compose, where compose is one of several
+output targets." Today the only renderer is Compose. The shape
+of the input is what makes future renderers cheap to add.
+
+If we get this right, the AI angle widens: an LLM that learns
+to write `config.ncl` can target any container orchestrator by
+swapping the renderer. The deployment description is portable;
+the output format is the runtime's concern.
