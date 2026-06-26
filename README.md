@@ -16,22 +16,31 @@ quirks (`!reset`, anchor merge, `${VAR:?}`). This project:
 - exports one `podman-compose.yml` that podman-compose picks up by
   convention (no `COMPOSE_FILE` needed)
 
-## Requirements
+## Install
 
-- [nickel](https://nickel-lang.org/) 1.17+ (mise: `aqua:nickel-lang/nickel`)
-- `jq` for the test suite
-- `podman-compose` (only for the podclaws example end-to-end check)
+```bash
+git clone https://github.com/keithy/nickel-compose.git
+cd nickel-compose
+mise trust         # trust mise/config.toml
+mise install       # install nickel + jq
+```
 
 ## Usage
 
+With mise tasks (recommended):
+
 ```bash
-# Render a config to podman-compose.yml:
-./nickel-render.sh --config examples/podclaws/config.ncl
+mise run check                       # typecheck the merge engine
+mise run test                        # run the test suite
+mise run render                      # render examples/podclaws/config.ncl
+mise run render -- config=path out=path   # render a custom config
+```
 
-# Or directly:
+Or directly:
+
+```bash
+./nickel-render.sh --config examples/podclaws/config.ncl --out podman-compose.yml
 nickel export --format yaml examples/podclaws/config.ncl > podman-compose.yml
-
-# Run the test suite:
 ./tests/run.sh
 ```
 
@@ -86,7 +95,7 @@ defaults in `lib/merge.ncl`'s `default_service` record.
 ## Writing a config
 
 ```nickel
-let build = import "nickel-compose/lib/merge.ncl" in
+let build = import "../lib/merge.ncl" in
 
 let fragments = [
   import "./compose.yml",
@@ -114,6 +123,30 @@ Verified end-to-end with nickel 1.17.0 and podman-compose 1.6.0.
 Test suite covers env concat, volume concat, default fill, and full
 round-trip through podman-compose.
 
+## Layout
+
+```
+nickel-compose/
+├── lib/
+│   └── merge.ncl              # merge engine (single function)
+├── examples/
+│   └── podclaws/
+│       └── config.ncl         # example using real podclaws fragments
+├── tests/
+│   ├── merge.ncl              # synthetic merge fixture
+│   └── run.sh                 # bash test runner with jq assertions
+├── mise/
+│   ├── config.toml            # tools (nickel, jq) + task config
+│   └── tasks/
+│       ├── check              # typecheck the merge engine
+│       ├── render             # render config to podman-compose.yml
+│       └── test               # run the test suite
+├── nickel-render.sh           # shell wrapper (typecheck + export)
+├── README.md
+├── LICENSE
+└── .gitignore
+```
+
 ## License
 
-See [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE).

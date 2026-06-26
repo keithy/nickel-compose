@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run nickel-compose smoke tests"
+#MISE raw=true
+"$(dirname "$0")/../../tests/run.sh"

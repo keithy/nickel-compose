@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Render a config to podman-compose.yml (use with -- config=path out=path)"
+#MISE raw=true
+CONFIG="${config:-examples/podclaws/config.ncl}"
+OUT="${out:-podman-compose.yml}"
+./nickel-render.sh --config "$CONFIG" --out "$OUT"

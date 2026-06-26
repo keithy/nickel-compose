@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Typecheck the merge engine"
+#MISE raw=true
+mise exec -- nickel typecheck lib/merge.ncl

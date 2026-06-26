@@ -1,0 +1,15 @@
+# mise.toml-equivalent for nickel-compose.
+#
+# Install: `mise install` (after `mise trust`).
+# Tasks: see mise/tasks/. Run with `mise run <task>`.
+
+[tools]
+"github:nickel-lang/nickel" = "1.17.0"
+jq = "latest"
+
+[task_config]
+includes = ["mise/tasks"]
+
+[env]
+# Allow the project to find its own lib/ regardless of cwd.
+NICKEL_COMPOSE_LIB = "{{ config_root }}/lib"
