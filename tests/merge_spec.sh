@@ -191,6 +191,31 @@ EOF
         true
       fi
     }
+
+    it "COMPOSE_FILE-driven wrapper produces equivalent output" && {
+      WRAPPER="$ROOT/examples/dummy-project/wrappers/from-compose-file.sh"
+      if [[ -x "$WRAPPER" ]]; then
+        WRAPPER_OUT="$ROOT/examples/dummy-project/podman-compose.yml"
+        (
+          cd "$ROOT/examples/dummy-project"
+          COMPOSE_FILE="compose.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+            "$WRAPPER" >/dev/null
+        )
+        should_succeed
+
+        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/podman-compose.yml" >/dev/null 2>&1; then
+          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/podman-compose.yml" | head -20
+          echo "wrapper output differs from direct export"
+          false
+        fi
+        should_succeed
+
+        rm -f "$WRAPPER_OUT"
+      else
+        echo "(skipped — wrapper not executable)"
+        true
+      fi
+    }
   }
 
   context "end-to-end with podclaws example (optional)" && {

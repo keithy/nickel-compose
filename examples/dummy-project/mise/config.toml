@@ -11,16 +11,14 @@
 
 [hooks]
 # On cd into this project, regenerate podman-compose.yml from the
-# current COMPOSE_FILE (or, in nickel-compose's case, from config.ncl).
-#
-# Without nickel-compose, this hook would run your picker script
-# (compose-services-select.sh) to update .env's COMPOSE_FILE. With
-# nickel-compose, it runs the merge and exports directly.
-cd = "QUIET=true nickel export --format yaml config.ncl > podman-compose.yml"
+# current COMPOSE_FILE. The wrapper reads $COMPOSE_FILE (set in your
+# .env, .bashrc, or below in [env]) and renders podman-compose.yml.
+cd = "QUIET=true ./wrappers/from-compose-file.sh"
 
 [env]
-# Tell podman-compose where to find the merged file.
-COMPOSE_FILE = "podman-compose.yml"
+# Optional: set COMPOSE_FILE here if you don't set it elsewhere.
+# Replace with your own fragments.
+COMPOSE_FILE = "compose.yml:services/web.yml:services/db.yml:overlays/dev.yml"
 
 [task_config]
 # In a real project, nickel-compose would be a submodule at ./nickel-compose/
