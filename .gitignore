@@ -2,6 +2,8 @@
 tests/.out.json
 tests/.out.yml
 tests/.example.yml
+tests/.override.json
+tests/.override.ncl
 
 # OS
 .DS_Store

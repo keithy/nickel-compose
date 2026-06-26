@@ -31,7 +31,7 @@ With mise tasks (recommended):
 
 ```bash
 mise run check                       # typecheck the merge engine
-mise run test                        # run the test suite
+mise run test                        # run the bash-spec test suite
 mise run render                      # render examples/podclaws/config.ncl
 mise run render -- config=path out=path   # render a custom config
 ```
@@ -41,8 +41,12 @@ Or directly:
 ```bash
 ./nickel-render.sh --config examples/podclaws/config.ncl --out podman-compose.yml
 nickel export --format yaml examples/podclaws/config.ncl > podman-compose.yml
-./tests/run.sh
+./tests/merge_spec.sh                 # bash-spec test runner
 ```
+
+The test suite uses [bash-spec 2.1](https://github.com/keithy/) (vendored
+under `tests/lib/`). Run `./tests/merge_spec.sh` to see the
+`describe` / `context` / `it` / `should_succeed` style output.
 
 ## How it works
 
@@ -133,14 +137,16 @@ nickel-compose/
 │   └── podclaws/
 │       └── config.ncl         # example using real podclaws fragments
 ├── tests/
-│   ├── merge.ncl              # synthetic merge fixture
-│   └── run.sh                 # bash test runner with jq assertions
+│   ├── merge.ncl              # synthetic merge fixture (rendered to JSON)
+│   ├── merge_spec.sh          # bash-spec 2.1 test runner
+│   └── lib/
+│       └── bash-spec.sh       # vendored bash-spec 2.1
 ├── mise/
 │   ├── config.toml            # tools (nickel, jq) + task config
 │   └── tasks/
 │       ├── check              # typecheck the merge engine
 │       ├── render             # render config to podman-compose.yml
-│       └── test               # run the test suite
+│       └── test               # run the bash-spec test suite
 ├── nickel-render.sh           # shell wrapper (typecheck + export)
 ├── README.md
 ├── LICENSE

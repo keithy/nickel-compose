@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-#MISE description="Run nickel-compose smoke tests"
+#MISE description="Run nickel-compose smoke tests (bash-spec)"
 #MISE raw=true
-"$(dirname "$0")/../../tests/run.sh"
+"$(dirname "$0")/../../tests/merge_spec.sh"
