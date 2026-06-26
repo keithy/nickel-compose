@@ -1,0 +1,11 @@
+# Database service skeleton for the dummy project.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=demo
+      - POSTGRES_PASSWORD=demo
+      - POSTGRES_DB=demo
+    volumes:
+      - db-data:/var/lib/postgresql/data

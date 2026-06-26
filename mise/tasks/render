@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
-#MISE description="Render a config to podman-compose.yml (use with -- config=path out=path)"
+#MISE description="Render config.ncl to podman-compose.yml (use with -- config=path out=path)"
 #MISE raw=true
-CONFIG="${config:-examples/podclaws/config.ncl}"
+
+# Find nickel-render.sh relative to this task file.
+TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$TASK_DIR/../.." && pwd)"
+RENDER_SH="$ROOT/nickel-render.sh"
+
+# Default config: ./config.ncl if present, else the bundled example.
+if [[ -z "${config:-}" ]]; then
+  if [[ -f "./config.ncl" ]]; then
+    config="./config.ncl"
+  else
+    config="$ROOT/examples/podclaws/config.ncl"
+  fi
+fi
+
 OUT="${out:-podman-compose.yml}"
-./nickel-render.sh --config "$CONFIG" --out "$OUT"
+
+"$RENDER_SH" --config "$config" --out "$OUT"

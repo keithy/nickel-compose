@@ -4,6 +4,9 @@ tests/.out.yml
 tests/.example.yml
 tests/.override.json
 tests/.override.ncl
+tests/.dummy.json
+tests/.dummy.yml
+podman-compose.yml
 
 # OS
 .DS_Store

@@ -1,0 +1,19 @@
+# Local development overlay.
+#
+# Exposes the db port so you can psql into it, and adds a Redis sidecar
+# for the web service to use. This is the kind of patch a developer adds
+# on top of the production-shaped fragments.
+
+services:
+  web:
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes

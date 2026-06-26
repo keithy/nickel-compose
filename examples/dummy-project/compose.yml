@@ -1,0 +1,12 @@
+# Root compose for the dummy project.
+#
+# Provides the shared `default` bridge network and the named volumes
+# used by the web and db services.
+
+volumes:
+  web-data:
+  db-data:
+
+networks:
+  default:
+    driver: bridge

@@ -22,10 +22,11 @@ OUT="$SCRIPT_DIR/.out.json"
 run_nickel export --format json "$ROOT/tests/merge.ncl" > "$OUT"
 
 # Read a JSON value into the bash variable named by $1.
+# Defaults to $OUT; pass a third arg to read a different file.
 read_jq() {
-  local _name="$1" _expr="$2"
+  local _name="$1" _expr="$2" _file="${3:-$OUT}"
   local _val
-  _val=$(jq -r "$_expr" "$OUT")
+  _val=$(jq -r "$_expr" "$_file")
   printf -v "$_name" '%s' "$_val"
 }
 
@@ -131,7 +132,59 @@ EOF
     }
   }
 
-  context "end-to-end with podclaws example" && {
+  context "end-to-end with dummy-project example" && {
+    # The dummy project is self-contained (its own YAML fragments).
+    # This is the CI-friendly end-to-end check that doesn't depend
+    # on /code/podclaws paths.
+    DUMMY="$ROOT/examples/dummy-project/config.ncl"
+    DUMMY_OUT="$SCRIPT_DIR/.dummy.yml"
+    DUMMY_JSON="$SCRIPT_DIR/.dummy.json"
+
+    it "renders without error" && {
+      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$DUMMY_OUT"
+      run_nickel export --format json "$DUMMY" > "$DUMMY_JSON"
+      should_succeed
+    }
+
+    it "output has all three services" && {
+      HAS_WEB=$(jq -r '.services | has("web")' "$DUMMY_JSON")
+      HAS_DB=$(jq -r '.services | has("db")' "$DUMMY_JSON")
+      HAS_REDIS=$(jq -r '.services | has("redis")' "$DUMMY_JSON")
+      expect "$HAS_WEB" to_be "true"
+      expect "$HAS_DB" to_be "true"
+      expect "$HAS_REDIS" to_be "true"
+    }
+
+    it "db port from dev overlay is merged" && {
+      PORT=$(jq -r '.services.db.ports[0]' "$DUMMY_JSON")
+      expect "$PORT" to_be "5432:5432"
+    }
+
+    it "web env from dev overlay is appended" && {
+      REDIS_HOST=$(jq -r '.services.web.environment[] | select(test("REDIS_HOST"))' "$DUMMY_JSON")
+      expect "$REDIS_HOST" to_match "REDIS_HOST=redis"
+    }
+
+    it "validates through podman-compose" && {
+      if command -v podman-compose >/dev/null 2>&1; then
+        podman-compose -f "$DUMMY_OUT" config >/dev/null
+        should_succeed
+      else
+        echo "(skipped)"
+        true
+      fi
+    }
+
+    it "named volumes union across fragments" && {
+      HAS_WEB_DATA=$(jq -r '.volumes | has("web-data")' "$DUMMY_JSON")
+      HAS_DB_DATA=$(jq -r '.volumes | has("db-data")' "$DUMMY_JSON")
+      expect "$HAS_WEB_DATA" to_be "true"
+      expect "$HAS_DB_DATA" to_be "true"
+    }
+  }
+
+  context "end-to-end with podclaws example (optional)" && {
+    # Skipped in CI — depends on /code/podclaws YAML paths.
     EXAMPLE="$ROOT/examples/podclaws/config.ncl"
     EXAMPLE_OUT="$SCRIPT_DIR/.example.yml"
 
