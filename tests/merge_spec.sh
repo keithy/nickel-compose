@@ -140,9 +140,9 @@ EOF
     DUMMY="$ROOT/examples/dummy-project/config.ncl"
 
     it "renders YAML without error" && {
-      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/podman-compose.yml"
+      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/compose.yml"
       mkdir -p "$OUT_DIR/dummy"
-      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/podman-compose.yml"
+      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/compose.yml"
       should_succeed
     }
 
@@ -152,7 +152,7 @@ EOF
     }
 
     it "YAML output matches expected snapshot" && {
-      assert_matches_expected "$OUT_DIR/dummy/podman-compose.yml" "$EXPECTED_DIR/dummy/podman-compose.yml"
+      assert_matches_expected "$OUT_DIR/dummy/compose.yml" "$EXPECTED_DIR/dummy/compose.yml"
       should_succeed
     }
 
@@ -184,7 +184,7 @@ EOF
 
     it "validates through podman-compose" && {
       if command -v podman-compose >/dev/null 2>&1; then
-        podman-compose -f "$OUT_DIR/dummy/podman-compose.yml" config >/dev/null
+        podman-compose -f "$OUT_DIR/dummy/compose.yml" config >/dev/null
         should_succeed
       else
         echo "(skipped)"
@@ -195,16 +195,19 @@ EOF
     it "COMPOSE_FILE-driven wrapper produces equivalent output" && {
       WRAPPER="$ROOT/examples/dummy-project/wrappers/from-compose-file.sh"
       if [[ -x "$WRAPPER" ]]; then
-        WRAPPER_OUT="$ROOT/examples/dummy-project/podman-compose.yml"
+        # Write wrapper output to a tmp path so we don't clobber the
+        # source compose.yml (which the wrapper would otherwise overwrite
+        # because the default output filename is compose.yml).
+        WRAPPER_OUT="$OUT_DIR/wrapper-output.yml"
         (
           cd "$ROOT/examples/dummy-project"
           COMPOSE_FILE="compose.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-            "$WRAPPER" >/dev/null
+            "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
         )
         should_succeed
 
-        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/podman-compose.yml" >/dev/null 2>&1; then
-          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/podman-compose.yml" | head -20
+        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" >/dev/null 2>&1; then
+          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" | head -20
           echo "wrapper output differs from direct export"
           false
         fi
@@ -225,7 +228,7 @@ EOF
     it "renders YAML without error" && {
       if [[ -f "$EXAMPLE" ]] && [[ -f "/code/podclaws/compose.yml" ]]; then
         mkdir -p "$OUT_DIR/podclaws"
-        run_nickel export --format yaml "$EXAMPLE" | sed -n '2,$p' > "$OUT_DIR/podclaws/podman-compose.yml"
+        run_nickel export --format yaml "$EXAMPLE" | sed -n '2,$p' > "$OUT_DIR/podclaws/compose.yml"
         should_succeed
       else
         echo "(skipped — no /code/podclaws/compose.yml)"
@@ -234,8 +237,8 @@ EOF
     }
 
     it "validates through podman-compose" && {
-      if command -v podman-compose >/dev/null 2>&1 && [[ -f "$OUT_DIR/podclaws/podman-compose.yml" ]]; then
-        GOCLAW_GATEWAY_TOKEN=test podman-compose -f "$OUT_DIR/podclaws/podman-compose.yml" config >/dev/null
+      if command -v podman-compose >/dev/null 2>&1 && [[ -f "$OUT_DIR/podclaws/compose.yml" ]]; then
+        GOCLAW_GATEWAY_TOKEN=test podman-compose -f "$OUT_DIR/podclaws/compose.yml" config >/dev/null
         should_succeed
       else
         echo "(skipped)"

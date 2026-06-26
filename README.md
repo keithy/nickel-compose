@@ -1,7 +1,7 @@
 # nickel-compose
 
 Nickel-driven compose: import YAML fragments, merge with Compose
-semantics, export a single `podman-compose.yml`.
+semantics, export a single `compose.yml`.
 
 ## Why
 
@@ -13,7 +13,7 @@ quirks (`!reset`, anchor merge, `${VAR:?}`). This project:
 - replaces the picker with a single `config.ncl`
 - merges fragments in Nickel with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
-- exports one `podman-compose.yml` that podman-compose picks up by
+- exports one `compose.yml` that podman-compose picks up by
   convention (no `COMPOSE_FILE` needed)
 
 ## Install
@@ -39,8 +39,8 @@ mise run render -- config=path out=path   # render a custom config
 Or directly:
 
 ```bash
-./nickel-render.sh --config examples/podclaws/config.ncl --out podman-compose.yml
-nickel export --format yaml examples/podclaws/config.ncl > podman-compose.yml
+./nickel-render.sh --config examples/podclaws/config.ncl --out compose.yml
+nickel export --format yaml examples/podclaws/config.ncl > compose.yml
 ./tests/merge_spec.sh                 # bash-spec test runner
 ```
 
@@ -67,7 +67,7 @@ In normal runs (no `INIT`), tests fail if `tests/out/` and
 ## How it works
 
 ```
-config.ncl  --[nickel export]-->  podman-compose.yml  --[podman compose]-->  containers
+config.ncl  --[nickel export]-->  compose.yml  --[podman compose]-->  containers
    |
    +-- imports YAML fragments
    +-- applies defaults per service
@@ -163,7 +163,7 @@ nickel-compose/
 │   ├── config.toml            # tools (nickel, jq) + task config
 │   └── tasks/
 │       ├── check              # typecheck the merge engine
-│       ├── render             # render config to podman-compose.yml
+│       ├── render             # render config to compose.yml
 │       └── test               # run the bash-spec test suite
 ├── nickel-render.sh           # shell wrapper (typecheck + export)
 ├── README.md

@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# nickel-render.sh — render a nickel-compose config to podman-compose.yml.
+# nickel-render.sh — render a nickel-compose config to compose.yml.
 #
 # Usage:
 #   nickel-render.sh --config PATH [--out PATH]
 #
 # Defaults:
 #   --config: ./config.ncl
-#   --out:    ./podman-compose.yml
+#   --out:    ./compose.yml
+#
+# The output filename `compose.yml` is auto-picked by both
+# `podman-compose` and `docker compose`, so users can run either
+# tool with no `-f` flag.
 #
 # Requires nickel (mise: aqua:nickel-lang/nickel) on PATH or via mise exec.
 
@@ -16,7 +20,7 @@ SCRIPT="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
 
 CONFIG="config.ncl"
-OUT="podman-compose.yml"
+OUT="compose.yml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

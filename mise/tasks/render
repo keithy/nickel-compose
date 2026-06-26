@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Render config.ncl to podman-compose.yml (use with -- config=path out=path)"
+#MISE description="Render config.ncl to compose.yml (use with -- config=path out=path)"
 #MISE raw=true
 
 # Find nickel-render.sh relative to this task file.
@@ -16,6 +16,6 @@ if [[ -z "${config:-}" ]]; then
   fi
 fi
 
-OUT="${out:-podman-compose.yml}"
+OUT="${out:-compose.yml}"
 
 "$RENDER_SH" --config "$config" --out "$OUT"

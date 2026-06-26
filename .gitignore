@@ -1,5 +1,5 @@
 # Test outputs (regenerated each test run)
 tests/out/
 
-# Build artifacts at project root
-/podman-compose.yml
+# Build artifacts at the project root only (anchored)
+/compose.yml

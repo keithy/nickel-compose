@@ -44,7 +44,7 @@ This is the simplest setup — no environment variable required.
 
 If you already set `COMPOSE_FILE=frag1.yml:frag2.yml:...` somewhere
 (`.env`, `.bashrc`, mise `[env]`, etc.) the wrapper script reads it
-and renders `podman-compose.yml`. You keep your existing mental model
+and renders `compose.yml`. You keep your existing mental model
 — COMPOSE_FILE stays the input list.
 
 ```bash
@@ -58,7 +58,7 @@ Nickel 1.17 requires `import` paths to be literals at parse time —
 runtime paths aren't supported. The wrapper bridges that gap.
 
 When you run `podman-compose up`, podman-compose reads the merged
-`podman-compose.yml` (the conventional name) — no `COMPOSE_FILE` env
+`compose.yml` (the conventional name) — no `COMPOSE_FILE` env
 needed at runtime, since the merged file is the only input.
 
 ## Try it
@@ -88,7 +88,7 @@ podman-compose config
 
 ## What gets merged
 
-Both options produce the same `podman-compose.yml`. Render it and look:
+Both options produce the same `compose.yml`. Render it and look:
 
 - `db` service: image + env from `db.yml`, plus the `5432:5432` port
   from `overlays/dev.yml`. Defaults `networks`/`restart`/`init`
@@ -101,7 +101,7 @@ Both options produce the same `podman-compose.yml`. Render it and look:
 
 ## The mise cd hook
 
-To keep `podman-compose.yml` fresh without running anything manually,
+To keep `compose.yml` fresh without running anything manually,
 wire the wrapper into your project's `mise.toml`:
 
 ```toml
@@ -109,7 +109,7 @@ wire the wrapper into your project's `mise.toml`:
 cd = "QUIET=true $MISE_PROJECT_ROOT/wrappers/from-compose-file.sh"
 ```
 
-Now every `cd` into the project regenerates `podman-compose.yml` from
+Now every `cd` into the project regenerates `compose.yml` from
 your current `COMPOSE_FILE`.
 
 ## Migrating your own project
@@ -123,7 +123,7 @@ your current `COMPOSE_FILE`.
 3. Edit the fragment list or COMPOSE_FILE to match your project.
 4. Add the cd hook to your `mise.toml`.
 5. `mise trust && mise install`
-6. `cd` into the project — `podman-compose.yml` appears.
+6. `cd` into the project — `compose.yml` appears.
 
 If you already have `COMPOSE_FILE` set in `.env` or `.bashrc`, you
 don't need to touch it. The wrapper reads it as-is.

@@ -10,9 +10,9 @@
 "github:nickel-lang/nickel" = "1.17.0"
 
 [hooks]
-# On cd into this project, regenerate podman-compose.yml from the
+# On cd into this project, regenerate compose.yml from the
 # current COMPOSE_FILE. The wrapper reads $COMPOSE_FILE (set in your
-# .env, .bashrc, or below in [env]) and renders podman-compose.yml.
+# .env, .bashrc, or below in [env]) and renders compose.yml.
 cd = "QUIET=true ./wrappers/from-compose-file.sh"
 
 [env]
