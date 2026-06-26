@@ -26,6 +26,7 @@ run_nickel() {
   fi
 }
 
+rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 # Read a JSON value into the bash variable named by $1.
@@ -133,6 +134,7 @@ EOF
       run_nickel export --format json "$OUT_DIR/.override.ncl" > "$OUT_DIR/.override.json"
       NET=$(jq -r '.services.web.networks[0]' "$OUT_DIR/.override.json")
       expect "$NET" to_be "other"
+      rm -f "$OUT_DIR/.override.ncl" "$OUT_DIR/.override.json"
     }
   }
 
@@ -140,7 +142,6 @@ EOF
     DUMMY="$ROOT/examples/dummy-project/config.ncl"
 
     it "renders YAML without error" && {
-      run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/compose.yml"
       mkdir -p "$OUT_DIR/dummy"
       run_nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "$OUT_DIR/dummy/compose.yml"
       should_succeed
@@ -247,5 +248,9 @@ EOF
         true
       fi
     }
+
+    # Cleanup: only present locally (not CI). Remove so subsequent
+    # runs start fresh.
+    rm -rf "$OUT_DIR/podclaws"
   }
 }
