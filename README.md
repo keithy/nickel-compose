@@ -6,15 +6,21 @@ semantics, export a single `compose.yml`.
 ## Why
 
 Podman/Docker compose ships as YAML. Multi-fragment setups (root +
-services + overlays) work via `COMPOSE_FILE=frag1:frag2:...`, but the
-selector logic and merge semantics live in shell scripts and YAML
-quirks (`!reset`, anchor merge, `${VAR:?}`). This project:
+services + overlays) usually combine fragments via a picker script
+or a colon-separated env var, but the merge semantics live in shell
+scripts and YAML quirks (`!reset`, anchor merge, `${VAR:?}`). This
+project:
 
 - replaces the picker with a single `config.ncl`
 - merges fragments in Nickel with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
-- exports one `compose.yml` that podman-compose picks up by
-  convention (no `COMPOSE_FILE` needed)
+- exports one `compose.yml` that both `podman-compose` and
+  `docker compose` auto-pick — no `-f` flag needed at deploy time
+
+`COMPOSE_FRAGMENTS` (the input list) is intentionally distinct from
+`COMPOSE_FILE` (which compose tools reserve for the merged output).
+A source fragment named `compose.yml` would collide with the output —
+rename it (e.g. to `base.yml`).
 
 ## Install
 

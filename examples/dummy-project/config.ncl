@@ -18,7 +18,7 @@
 let build = import "../../lib/merge.ncl" in
 
 let fragments = [
-  import "./compose.yml",
+  import "./base.yml",
   import "./services/web.yml",
   import "./services/db.yml",
   import "./overlays/dev.yml",

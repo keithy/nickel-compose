@@ -192,16 +192,18 @@ EOF
       fi
     }
 
-    it "COMPOSE_FILE-driven wrapper produces equivalent output" && {
+    it "COMPOSE_FRAGMENTS-driven wrapper produces equivalent output" && {
       WRAPPER="$ROOT/examples/dummy-project/wrappers/from-compose-file.sh"
       if [[ -x "$WRAPPER" ]]; then
         # Write wrapper output to a tmp path so we don't clobber the
-        # source compose.yml (which the wrapper would otherwise overwrite
-        # because the default output filename is compose.yml).
+        # source base.yml (which the wrapper would otherwise overwrite
+        # because the default output filename is compose.yml — but if
+        # the source fragment were also compose.yml that would
+        # collide, hence the rename to base.yml in the dummy project).
         WRAPPER_OUT="$OUT_DIR/wrapper-output.yml"
         (
           cd "$ROOT/examples/dummy-project"
-          COMPOSE_FILE="compose.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+          COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
             "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
         )
         should_succeed

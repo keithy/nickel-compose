@@ -8,7 +8,7 @@ everything you need is in this directory.
 
 ```
 dummy-project/
-├── compose.yml              # root: networks + named volumes
+├── base.yml                # root: networks + named volumes
 ├── services/
 │   ├── web.yml              # web service skeleton
 │   └── db.yml               # database service skeleton
@@ -16,10 +16,15 @@ dummy-project/
 │   └── dev.yml              # local development overlay (adds redis, exposes db)
 ├── config.ncl               # the Nickel entry point (literal fragment list)
 ├── wrappers/
-│   └── from-compose-file.sh # COMPOSE_FILE-driven variant of the entry point
+│   └── from-compose-file.sh # COMPOSE_FRAGMENTS-driven variant
 └── mise/
     └── config.toml          # tools + cd hook + task includes
 ```
+
+The root fragment is named `base.yml`, not `compose.yml`, because
+`compose.yml` is reserved as the merged output filename (auto-picked
+by podman-compose and docker compose). Naming the source `base.yml`
+avoids any collision.
 
 ## Two ways to drive the merge
 
@@ -40,15 +45,17 @@ let fragments = [
 Order matters: later fragments override scalars and concat arrays.
 This is the simplest setup — no environment variable required.
 
-### Option B: COMPOSE_FILE-driven (wrappers/from-compose-file.sh)
+### Option B: COMPOSE_FRAGMENTS-driven (wrappers/from-compose-file.sh)
 
-If you already set `COMPOSE_FILE=frag1.yml:frag2.yml:...` somewhere
-(`.env`, `.bashrc`, mise `[env]`, etc.) the wrapper script reads it
-and renders `compose.yml`. You keep your existing mental model
-— COMPOSE_FILE stays the input list.
+If you already maintain a list of fragments (in `.env`, `.bashrc`,
+mise `[env]`, etc.) the wrapper script reads `COMPOSE_FRAGMENTS`
+and renders `compose.yml`. The variable is named
+`COMPOSE_FRAGMENTS` (not `COMPOSE_FILE`) because compose tools
+reserve `COMPOSE_FILE` for the merged output path. The two roles
+don't collide.
 
 ```bash
-COMPOSE_FILE="compose.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
   ./wrappers/from-compose-file.sh
 ```
 
@@ -80,8 +87,8 @@ podman-compose config       # validates
 or:
 
 ```bash
-# Option B — COMPOSE_FILE-driven
-export COMPOSE_FILE="compose.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+# Option B — COMPOSE_FRAGMENTS-driven
+export COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
 ./wrappers/from-compose-file.sh
 podman-compose config
 ```
@@ -110,7 +117,7 @@ cd = "QUIET=true $MISE_PROJECT_ROOT/wrappers/from-compose-file.sh"
 ```
 
 Now every `cd` into the project regenerates `compose.yml` from
-your current `COMPOSE_FILE`.
+your current `COMPOSE_FRAGMENTS`.
 
 ## Migrating your own project
 
@@ -125,17 +132,22 @@ your current `COMPOSE_FILE`.
 5. `mise trust && mise install`
 6. `cd` into the project — `compose.yml` appears.
 
-If you already have `COMPOSE_FILE` set in `.env` or `.bashrc`, you
-don't need to touch it. The wrapper reads it as-is.
+If you already have a fragment list set in `.env` or `.bashrc`,
+rename the env var to `COMPOSE_FRAGMENTS` (or migrate to listing
+fragments in `config.ncl` directly). The wrapper reads it as-is.
 
 ## Troubleshooting
 
 - **`nickel: command not found` on cd** — run `mise install` once
   on first checkout.
 - **`file not found` from nickel export** — typo in `config.ncl`'s
-  `fragments` list, or `COMPOSE_FILE` path that doesn't exist. Paths
-  in `config.ncl` are relative to the file; paths in `COMPOSE_FILE`
-  are relative to cwd.
+  `fragments` list, or `COMPOSE_FRAGMENTS` path that doesn't exist.
+  Paths in `config.ncl` are relative to the file; paths in
+  `COMPOSE_FRAGMENTS` are relative to cwd.
+- **`output path ... is also in COMPOSE_FRAGMENTS`** — your fragment
+  list includes a file with the same name as the output (default
+  `compose.yml`). Either rename the source fragment (e.g. to
+  `base.yml`) or pass `--out merged-compose.yml` to the wrapper.
 - **`podman-compose config` rejects output** — usually a malformed
   `${VAR}` in a fragment. Comment out fragments one at a time to find
   the offender.

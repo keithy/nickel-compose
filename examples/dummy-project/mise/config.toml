@@ -11,14 +11,15 @@
 
 [hooks]
 # On cd into this project, regenerate compose.yml from the
-# current COMPOSE_FILE. The wrapper reads $COMPOSE_FILE (set in your
-# .env, .bashrc, or below in [env]) and renders compose.yml.
+# current COMPOSE_FRAGMENTS. The wrapper reads $COMPOSE_FRAGMENTS
+# (set in your .env, .bashrc, or below in [env]) and renders compose.yml.
 cd = "QUIET=true ./wrappers/from-compose-file.sh"
 
 [env]
-# Optional: set COMPOSE_FILE here if you don't set it elsewhere.
-# Replace with your own fragments.
-COMPOSE_FILE = "compose.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+# Optional: set COMPOSE_FRAGMENTS here if you don't set it elsewhere.
+# Replace with your own fragments. The root fragment is base.yml;
+# the output is compose.yml — distinct names so they can't collide.
+COMPOSE_FRAGMENTS = "base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
 
 [task_config]
 # In a real project, nickel-compose would be a submodule at ./nickel-compose/
