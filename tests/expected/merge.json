@@ -1,0 +1,24 @@
+{
+  "networks": {},
+  "services": {
+    "web": {
+      "environment": [
+        "FOO=1",
+        "BAR=2"
+      ],
+      "image": "nginx:1.27",
+      "init": false,
+      "networks": [
+        "default"
+      ],
+      "restart": "unless-stopped",
+      "volumes": [
+        "data:/var/lib/data",
+        "/code:/code"
+      ]
+    }
+  },
+  "volumes": {
+    "data": null
+  }
+}

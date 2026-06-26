@@ -48,6 +48,22 @@ The test suite uses [bash-spec 2.1](https://github.com/keithy/) (vendored
 under `tests/lib/`). Run `./tests/merge_spec.sh` to see the
 `describe` / `context` / `it` / `should_succeed` style output.
 
+### Golden-file testing
+
+Rendered outputs go to `tests/out/` (gitignored). Snapshots of the
+correct output live in `tests/expected/` (committed). Each test
+asserts that the rendered file matches its expected snapshot.
+
+To regenerate snapshots after intentional changes:
+
+```bash
+INIT=true mise run test
+git add tests/expected/
+```
+
+In normal runs (no `INIT`), tests fail if `tests/out/` and
+`tests/expected/` differ.
+
 ## How it works
 
 ```
@@ -134,13 +150,15 @@ nickel-compose/
 ├── lib/
 │   └── merge.ncl              # merge engine (single function)
 ├── examples/
-│   └── podclaws/
-│       └── config.ncl         # example using real podclaws fragments
+│   ├── dummy-project/         # self-contained first-time-user example
+│   └── podclaws/              # example using real podclaws fragments
 ├── tests/
-│   ├── merge.ncl              # synthetic merge fixture (rendered to JSON)
+│   ├── merge.ncl              # synthetic merge fixture
 │   ├── merge_spec.sh          # bash-spec 2.1 test runner
-│   └── lib/
-│       └── bash-spec.sh       # vendored bash-spec 2.1
+│   ├── lib/
+│   │   └── bash-spec.sh       # vendored bash-spec 2.1
+│   ├── out/                   # rendered outputs (gitignored)
+│   └── expected/              # golden snapshots (committed)
 ├── mise/
 │   ├── config.toml            # tools (nickel, jq) + task config
 │   └── tasks/

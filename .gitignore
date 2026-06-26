@@ -1,14 +1,5 @@
-# Build/test artifacts
-tests/.out.json
-tests/.out.yml
-tests/.example.yml
-tests/.override.json
-tests/.override.ncl
-tests/.dummy.json
-tests/.dummy.yml
-podman-compose.yml
+# Test outputs (regenerated each test run)
+tests/out/
 
-# OS
-.DS_Store
-*.swp
-*.swo
+# Build artifacts at project root
+/podman-compose.yml

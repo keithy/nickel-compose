@@ -1,0 +1,45 @@
+networks:
+  default:
+    driver: bridge
+services:
+  db:
+    environment:
+    - POSTGRES_USER=demo
+    - POSTGRES_PASSWORD=demo
+    - POSTGRES_DB=demo
+    image: postgres:16-alpine
+    init: false
+    networks:
+    - default
+    ports:
+    - 5432:5432
+    restart: unless-stopped
+    volumes:
+    - db-data:/var/lib/postgresql/data
+  redis:
+    command: redis-server --appendonly yes
+    image: redis:7-alpine
+    init: false
+    networks:
+    - default
+    restart: unless-stopped
+  web:
+    depends_on:
+    - db
+    environment:
+    - DB_HOST=db
+    - DB_PORT=5432
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    image: nginx:1.27
+    init: false
+    networks:
+    - default
+    ports:
+    - 8080:80
+    restart: unless-stopped
+    volumes:
+    - web-data:/var/www/html
+volumes:
+  db-data: null
+  web-data: null
