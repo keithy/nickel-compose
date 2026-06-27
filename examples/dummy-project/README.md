@@ -16,7 +16,8 @@ dummy-project/
 │   └── dev.yml              # local development overlay (adds redis, exposes db)
 ├── config.ncl               # the Nickel entry point (literal fragment list)
 ├── wrappers/
-│   └── from-compose-file.sh # COMPOSE_FRAGMENTS-driven variant
+│   ├── from-compose-file.sh # COMPOSE_FRAGMENTS-driven (Stage 0)
+│   └── from-nickel-compose.sh # NICKEL_COMPOSE-driven (Stages 0-1)
 └── mise/
     └── config.toml          # tools + cd hook + task includes
 ```
@@ -25,6 +26,13 @@ The root fragment is named `base.yml`, not `compose.yml`, because
 `compose.yml` is reserved as the merged output filename (auto-picked
 by podman-compose and docker compose). Naming the source `base.yml`
 avoids any collision.
+
+Two wrappers are shipped. `from-compose-file.sh` reads
+`COMPOSE_FRAGMENTS` (a literal colon list). `from-nickel-compose.sh`
+reads `NICKEL_COMPOSE` (a list of env-var names, each holding a
+colon-separated fragment list). The latter is the recommended
+migration path — see [WORKFLOW.md](../../WORKFLOW.md) for the
+three-stage migration from existing `COMPOSE_FILE` projects.
 
 ## Two ways to drive the merge
 

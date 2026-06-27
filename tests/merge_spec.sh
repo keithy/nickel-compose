@@ -222,6 +222,60 @@ EOF
         true
       fi
     }
+
+    it "NICKEL_COMPOSE-driven wrapper (Stage 0): single env var" && {
+      WRAPPER="$ROOT/examples/dummy-project/wrappers/from-nickel-compose.sh"
+      if [[ -x "$WRAPPER" ]]; then
+        WRAPPER_OUT="$OUT_DIR/wrapper-stage0.yml"
+        (
+          cd "$ROOT/examples/dummy-project"
+          COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+            NICKEL_COMPOSE='$COMPOSE_FILE' \
+            "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+        )
+        should_succeed
+
+        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" >/dev/null 2>&1; then
+          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" | head -20
+          echo "stage 0 wrapper output differs"
+          false
+        fi
+        should_succeed
+
+        rm -f "$WRAPPER_OUT"
+      else
+        echo "(skipped)"
+        true
+      fi
+    }
+
+    it "NICKEL_COMPOSE-driven wrapper (Stage 1): split env vars" && {
+      WRAPPER="$ROOT/examples/dummy-project/wrappers/from-nickel-compose.sh"
+      if [[ -x "$WRAPPER" ]]; then
+        WRAPPER_OUT="$OUT_DIR/wrapper-stage1.yml"
+        (
+          cd "$ROOT/examples/dummy-project"
+          COMPOSE_SERVICES="services/web.yml:services/db.yml" \
+            COMPOSE_OVERLAYS="overlays/dev.yml" \
+            COMPOSE_FILE="base.yml" \
+            NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
+            "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+        )
+        should_succeed
+
+        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" >/dev/null 2>&1; then
+          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" | head -20
+          echo "stage 1 wrapper output differs"
+          false
+        fi
+        should_succeed
+
+        rm -f "$WRAPPER_OUT"
+      else
+        echo "(skipped)"
+        true
+      fi
+    }
   }
 
   context "end-to-end with podclaws example (optional)" && {
