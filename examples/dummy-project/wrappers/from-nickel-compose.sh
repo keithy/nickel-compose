@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # wrappers/from-nickel-compose.sh — render compose.yml from $NICKEL_COMPOSE.
 #
-# NICKEL_COMPOSE is a colon-separated list of *env-var names*. Each
-# named env var is itself a colon-separated list of fragment paths.
-# The wrapper reads each, concatenates the fragment lists in order,
-# and renders compose.yml by merging them with Compose semantics.
-#
-# This is the migration workflow: existing projects can keep their
-# own env vars (COMPOSE_FILE, COMPOSE_SERVICES, COMPOSE_OVERLAYS)
-# and have nickel-compose just orchestrate the assembly.
+# NICKEL_COMPOSE is a colon-separated list. Each token is either:
+#   - an env-var reference: $FOO or FOO
+#     expanded to the value of that env var (which is itself a
+#     colon-separated list of fragment paths)
+#   - a literal file path: web.yml or /abs/path/to/x.yml
+#     used as-is
+# Tokens are concatenated in order. Mixed forms are allowed:
+#   NICKEL_COMPOSE='web.yml:$COMPOSE_OVERLAYS:db.yml'
 #
 # Usage:
 #   NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
+#     ./wrappers/from-nickel-compose.sh
+#   NICKEL_COMPOSE='base.yml:services/web.yml:services/db.yml' \
 #     ./wrappers/from-nickel-compose.sh
 #   ./wrappers/from-nickel-compose.sh --out my.yml
 #
@@ -20,22 +22,22 @@
 #   Stage 1: NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE'
 #   Stage 2: freeze into compose.ncl, drop the env vars
 #
-# Why NICKEL_COMPOSE instead of COMPOSE_FRAGMENTS:
+# Why NICKEL_COMPOSE:
 #
-#   COMPOSE_FRAGMENTS takes a literal colon list. NICKEL_COMPOSE
-#   takes a list of env-var *names*, each of which holds a
-#   colon-separated list. So:
+#   NICKEL_COMPOSE accepts a mix of literal paths and env-var
+#   references. So:
+#     NICKEL_COMPOSE='web.yml:db.yml:dev.yml'
+#   is the simple form (three literal paths), while
 #     NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS'
 #     COMPOSE_SERVICES='web.yml:db.yml'
 #     COMPOSE_OVERLAYS='dev.yml'
-#   = same fragments as
-#     COMPOSE_FRAGMENTS='web.yml:db.yml:dev.yml'
-#   but with each role separated into its own env var.
+#   is the orchestrated form (three env-var indirections). The
+#   wrapper expands each token in order, so changing
+#   COMPOSE_OVERLAYS (e.g. switching from dev to prod overlay) is
+#   a one-env-var edit; NICKEL_COMPOSE stays the same.
 #
-# Indirection: $VAR in NICKEL_COMPOSE is shell-expanded to that
-# var's value at wrapper invocation. So changing COMPOSE_OVERLAYS
-# (e.g. switching from dev to prod overlay) is a one-env-var edit;
-# NICKEL_COMPOSE stays the same.
+#   Mixed forms are allowed: 'web.yml:$COMPOSE_OVERLAYS:db.yml'
+#   combines literals and env-var references in one expression.
 
 set -euo pipefail
 
@@ -67,8 +69,10 @@ nickel_compose="${NICKEL_COMPOSE:-}"
 
 if [[ -z "$nickel_compose" ]]; then
   echo "NICKEL_COMPOSE not set" >&2
-  echo "Set it to a colon-separated list of env-var names, e.g.:" >&2
-  echo "  export NICKEL_COMPOSE='\$COMPOSE_SERVICES:\$COMPOSE_OVERLAYS:\$COMPOSE_FILE'" >&2
+  echo "Set it to a colon-separated list of fragment paths and/or env-var references:" >&2
+  echo "  NICKEL_COMPOSE='base.yml:services/web.yml:overlays/dev.yml'" >&2
+  echo "  NICKEL_COMPOSE='\$COMPOSE_SERVICES:\$COMPOSE_OVERLAYS:\$COMPOSE_FILE'" >&2
+  echo "  NICKEL_COMPOSE='web.yml:\$COMPOSE_OVERLAYS'" >&2
   exit 1
 fi
 
@@ -81,24 +85,31 @@ fi
 #   web.yml:db.yml:dev.yml
 fragments=""
 
+# Each token in NICKEL_COMPOSE is either:
+#   - an env-var reference ($FOO or FOO) — expanded to its value
+#   - a literal file path — used as-is
+# The expanded/resolved tokens are concatenated in order.
 # shellcheck disable=SC2162
-IFS=':' read -ra var_names <<< "$nickel_compose"
-for var_name in "${var_names[@]}"; do
-  # Strip the leading $ if present (so both '$FOO' and 'FOO' work).
-  var_name="${var_name#\$}"
-  if [[ -z "$var_name" ]]; then
+IFS=':' read -ra tokens <<< "$nickel_compose"
+for token in "${tokens[@]}"; do
+  if [[ -z "$token" ]]; then
     continue
   fi
-  # Indirect expansion: get the value of the env var named by $var_name.
-  value="${!var_name:-}"
-  if [[ -z "$value" ]]; then
-    echo "  NICKEL_COMPOSE references \$ $var_name but it's unset or empty" >&2
-    continue
+  if [[ "$token" == \$* ]]; then
+    # Env-var reference: $FOO -> FOO, then indirect-expand.
+    var_name="${token#\$}"
+    value="${!var_name:-}"
+    if [[ -z "$value" ]]; then
+      echo "  NICKEL_COMPOSE references \$$var_name but it's unset or empty" >&2
+      continue
+    fi
+    token="$value"
   fi
+  # `token` is now a fragment path (from env var or literal).
   if [[ -z "$fragments" ]]; then
-    fragments="$value"
+    fragments="$token"
   else
-    fragments="$fragments:$value"
+    fragments="$fragments:$token"
   fi
 done
 

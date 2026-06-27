@@ -276,6 +276,33 @@ EOF
         true
       fi
     }
+
+    it "NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
+      WRAPPER="$ROOT/examples/dummy-project/wrappers/from-nickel-compose.sh"
+      if [[ -x "$WRAPPER" ]]; then
+        WRAPPER_OUT="$OUT_DIR/wrapper-mixed.yml"
+        (
+          cd "$ROOT/examples/dummy-project"
+          # Mix of literal paths and an env-var reference.
+          NICKEL_COMPOSE='base.yml:services/web.yml:$REMAINING' \
+            REMAINING="services/db.yml:overlays/dev.yml" \
+            "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+        )
+        should_succeed
+
+        if ! diff -q "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" >/dev/null 2>&1; then
+          diff "$WRAPPER_OUT" "$OUT_DIR/dummy/compose.yml" | head -20
+          echo "mixed form wrapper output differs"
+          false
+        fi
+        should_succeed
+
+        rm -f "$WRAPPER_OUT"
+      else
+        echo "(skipped)"
+        true
+      fi
+    }
   }
 
   context "end-to-end with podclaws example (optional)" && {
