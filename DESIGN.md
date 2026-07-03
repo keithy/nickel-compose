@@ -2,19 +2,40 @@
 
 ## What we're after
 
-Compose today is a bag of YAML quirks that every team reinvents
-badly. Nickel-compose is the move from that bag to a typed,
-ordered, composable description of a deployment. The system does
-the same thing before and after; humans reason about it
-differently.
+Docker-Compose uses YAML to define a pod of containers, the greatest irony
+being that docker-compose is not composable.
+
+Ask your favourite LLM why YAML must die; every use of YAML is a bag of quirks,
+teams either reinvent solutions and workarounds or in this instance level up
+to kubernetes in order to have a legitimately complex system to blame,
+and a different set of workarounds blessed by bigger companies.
+
+Nickel-compose is the move in the right direction, upwards to an elegant abstraction,
+a fully-typed, schema-validated, composable-decomposable model describing a
+deployment `pod` of containers. 
+
+One of the design premises for podman is that a model of a `pod` can be deployed
+upon kubernetes, since podman is itself a single-node kubernetes-lite. The developers
+of podman themselves preferred to skip the docker-compose abstraction entirely, but
+it does kind of hit a sweet spot when prototyping systems.
+
+## Instant Gratification - Both Human and LLM
+
+Nickel-Compose provides an evolutionary step that docker-compose users can apply
+to get instant rewards.
+
+The model we use here is an entirely better abstraction for a `pod` of containers
+that an LLM would be far more comfortable with creating. The LLM can create the pod
+using a single file of `nickel`, a logical structure and extensive comments
+not to mention the availability of write-time validation.
 
 ## The pain we're moving past
 
 | Compose pain | Why it hurts |
 |---|---|
-| No fragment picker | Every team writes `compose-services-select.sh` (or equivalent) and gets it slightly wrong. Bash + grep + sed is not the right tool for declaring which fragments combine into a stack. |
-| `COMPOSE_FILE=a:b:c` | Clumsy. One line. No inline expansion of other env vars. Tied to the colon-separated idiom for historical reasons. |
-| No typecheck | A typo in a service name, a wrong env var name, a missing required field — all pass compose validation and fail at `podman compose up`. Container start is the worst place to discover a typo. |
+| No fragment picker | Project team may write `compose-services-select.sh` (or equivalent), lacks consistency |
+| `COMPOSE_FILE=a:b:c` | Clumsy. `.env` file requires single line values. No expansion of env vars. Ordered colon-separated idiom is barely fit for purpose |
+| No typecheck | A typo in a service name, a wrong env var name, a missing required field — all pass compose validation and fail at `podman compose up`. Container start is the worst place to discover a typo, and runtime error messages are not always helpful |
 | Not composable | Overlays merge via `!reset`, anchor merge (`*alias`, `&alias`), `${VAR:?msg}`. Each is a YAML loader quirk or a Compose extension. Knowledge of these is tribal, not in the type system. |
 | Needs `base.yml` | The output filename `compose.yml` collides with the conventional root fragment name. Workaround: rename the root. Workaround-of-the-workaround: write a tiny file that just declares `networks` and `volumes`. |
 | Order matters silently | Wrong order = silently wrong overlay. No warning, no validation. Compose's "later wins" is a rule humans have to remember, not a property of the description. |
