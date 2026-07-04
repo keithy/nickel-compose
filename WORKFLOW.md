@@ -235,6 +235,12 @@ Drop the env vars. `nickel export --format yaml compose.ncl >
 compose.yml` is now the build step. The wrapper is no longer
 used; `NICKEL_COMPOSE` is removed from the environment.
 
+If your services reference named volumes and you don't need to
+set volume drivers or other options, `base.yml` is also optional
+at this stage. The merge engine synthesizes top-level
+declarations from service references. See the dummy-project's
+`config_no_base.ncl` for the no-root-fragment layout.
+
 **Stage 3: optional — convert fragments to inline records**
 
 Convert `services/web.yml` to a Nickel record literal. Inline
@@ -254,7 +260,7 @@ comments. Single `compose.ncl` becomes the whole deployment.
 
 The end state is "edit `compose.ncl`, run `nickel export`, run
 `podman-compose up`." No env vars, no bash picker, no
-`!reset`, no `base.yml` workaround.
+`!reset`, no root fragment required.
 
 ## What this gives the AI
 

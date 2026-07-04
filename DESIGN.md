@@ -48,7 +48,7 @@ not to mention the availability of write-time validation.
 | `COMPOSE_FILE` | `NICKEL_COMPOSE` for the input list (clearly named for its role; accepts literal paths and `$VAR` references). `${VAR}` interpolation works the same way compose does — Nickel passes the strings through verbatim. |
 | No typecheck | Contracts. Missing field → typecheck error with file:line, before any container starts. Per-fragment contracts as needed (`GoclawBase`, `PostgresBase`, etc.). |
 | Not composable | One merge engine in `lib/merge.ncl`. `array_fields` list controls concat-vs-replace. Records recurse. Records union at the top level. All explicit, all in one file, all readable. |
-| Needs `base.yml` | The merge engine auto-fills defaults (`networks`, `restart`, `init`) per service. A root fragment is needed only for top-level `volumes:` declarations — and even that can be folded into a fragment named anything other than the auto-pick output. |
+| Needs `base.yml` | The merge engine synthesizes top-level `volumes:` and `networks:` from service references. No root fragment required for projects with named volumes — the engine extracts `<name>:/path` patterns from `services.<svc>.volumes` and emits `volumes: { <name> = null }`. Pre-declared entries (with `driver`, `driver_opts`, etc.) win over synthesis. Bind mounts (`./path:`, `/abs:`, `${VAR}:`) are skipped. The `default` network is skipped (compose handles it implicitly). |
 | Order matters silently | Order still matters for `b wins on collision` semantics — that's intrinsic to overlay composition. But the typecheck catches missing required keys regardless of order, and the merge engine's behavior is the same in both directions of any two-fragment merge. |
 
 ## The two-way bet
@@ -188,16 +188,18 @@ The LLM that writes compose YAML produces something:
 
 ## Status
 
-The merge engine (`lib/merge.ncl`), the typecheck scaffolding,
-and the wrapper are working. The example (dummy-project) shows
-both authoring modes (literal list in `config.ncl`,
-`NICKEL_COMPOSE`-driven wrapper). The dual-direction bet is
-proven.
+The merge engine (`lib/merge.ncl`) with **top-level volume and
+network synthesis**, the typecheck scaffolding, and the wrapper
+are working. The example (dummy-project) shows both authoring
+modes (literal list in `config.ncl`, `NICKEL_COMPOSE`-driven
+wrapper) plus three Nickel-native configs (`config_ncl.ncl`,
+`config_mixed.ncl`, `config_no_base.ncl`) demonstrating the
+migration stages and the synthesis feature. The dual-direction
+bet is proven.
 
 What's not yet there:
 - Per-fragment contracts (GoclawBase, PostgresBase, etc.) for
   catching real bugs at typecheck time.
-- Auto-emit of an empty root fragment when the list has none.
 - A `nickel compose fragments <config.ncl>` command to decompose
   a monolith into per-service files.
 - A `nickel compose merge <fragment.ncl> ...` command to compose

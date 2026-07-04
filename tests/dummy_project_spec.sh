@@ -50,6 +50,25 @@ describe "dummy-project end-to-end" && {
     expect_no_diff "out/dummy/compose-mixed.yml" "expected/dummy/compose.yml"
   }
 
+  it "config_no_base.ncl validates: engine synthesizes top-level volumes from services" && {
+    # No base fragment, but the merge engine scans service volume
+    # references and synthesizes top-level declarations. The result
+    # should be valid compose — podman-compose config accepts it.
+    run nickel export --format yaml "$ROOT/examples/dummy-project/config_no_base.ncl" \
+      | sed -n '2,$p' > "out/dummy/compose-no-base.yml"
+    should_succeed
+    # The synthesized top-level volumes: web-data, db-data.
+    expect_jq "out/dummy/compose-no-base.yml" '.volumes | has("web-data")' to_be "true"
+    expect_jq "out/dummy/compose-no-base.yml" '.volumes | has("db-data")'  to_be "true"
+    if command -v podman-compose >/dev/null 2>&1; then
+      podman-compose -f "out/dummy/compose-no-base.yml" config >/dev/null
+      should_succeed
+    else
+      echo "(skipped — podman-compose not installed)"
+      true
+    fi
+  }
+
   it "all three services present (web, db, redis)" && {
     expect_jq "out/dummy/compose.json" '.services | has("web")'   to_be "true"
     expect_jq "out/dummy/compose.json" '.services | has("db")'    to_be "true"
@@ -69,6 +88,35 @@ describe "dummy-project end-to-end" && {
   it "named volumes union (web-data, db-data)" && {
     expect_jq "out/dummy/compose.json" '.volumes | has("web-data")' to_be "true"
     expect_jq "out/dummy/compose.json" '.volumes | has("db-data")'  to_be "true"
+  }
+
+  it "synthesis preserves pre-declared volume driver config" && {
+    # Synthesizes web-data/db-data with null body, but base.ncl
+    # declares them with null too — verify driver field exists
+    # when explicitly supplied via a custom fragment.
+    cat > "out/.driver-test.ncl" <<EOF
+let build = import "$ROOT/lib/merge.ncl" in
+let svc = {
+  services = {
+    cache = {
+      image = "redis:7-alpine",
+      volumes = ["cache-data:/data"],
+    },
+  },
+} in
+let driver_frag = {
+  volumes = {
+    "cache-data" = { driver = "local", driver_opts = { type = "nfs" } },
+  },
+} in
+build [svc, driver_frag]
+EOF
+    run nickel export --format json "out/.driver-test.ncl" \
+      > "out/dummy/compose-driver.json"
+    should_succeed
+    expect_jq "out/dummy/compose-driver.json" '.volumes."cache-data".driver' to_be "local"
+    expect_jq "out/dummy/compose-driver.json" '.volumes."cache-data".driver_opts.type' to_be "nfs"
+    rm -f "out/.driver-test.ncl" "out/dummy/compose-driver.json"
   }
 
   it "validates through podman-compose" && {

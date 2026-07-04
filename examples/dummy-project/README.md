@@ -9,13 +9,20 @@ the nickel-compose repo root (`../../wrappers/`).
 
 ```
 dummy-project/
-├── base.yml                # root: networks + named volumes
+├── base.yml                # root: networks + named volumes (optional — see config_no_base.ncl)
+├── base.ncl                # Nickel equivalent of base.yml
 ├── services/
 │   ├── web.yml              # web service skeleton
-│   └── db.yml               # database service skeleton
+│   ├── web.ncl              # Nickel equivalent
+│   ├── db.yml               # database service skeleton
+│   └── db.ncl               # Nickel equivalent
 ├── overlays/
-│   └── dev.yml              # local development overlay (adds redis, exposes db)
-├── config.ncl               # the Nickel entry point (literal fragment list)
+│   ├── dev.yml              # local development overlay (adds redis, exposes db)
+│   └── dev.ncl              # Nickel equivalent
+├── config.ncl               # all-YAML entry point (Stage 0)
+├── config_ncl.ncl           # all-Nickel entry point (Stage 3)
+├── config_mixed.ncl         # partial migration demo (Stage 2)
+├── config_no_base.ncl       # no root fragment — engine synthesizes from services
 └── mise/
     └── config.toml          # tools + cd hook + task includes
 ```
@@ -28,6 +35,10 @@ The root fragment is named `base.yml`, not `compose.yml`, because
 `compose.yml` is reserved as the merged output filename (auto-picked
 by podman-compose and docker compose). Naming the source `base.yml`
 avoids any collision.
+
+**You don't actually need a base fragment.** The merge engine scans
+service volume and network references and synthesizes top-level
+declarations. See `config_no_base.ncl` for the demo.
 
 ## Try it first — Stage 0 (zero work)
 

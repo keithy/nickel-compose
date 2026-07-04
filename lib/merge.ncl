@@ -13,6 +13,10 @@
 #   - services/volumes/networks: union of keys (later wins on collision)
 #   - service fields: scalar later-wins, arrays concat (if both sides
 #     are arrays AND the field is in `array_fields`), records recurse
+#   - top-level volumes/networks: synthesized from service references
+#     if not declared by any fragment (compose users don't have to
+#     maintain a separate base fragment just to declare volumes their
+#     services reference)
 #
 # Tested with nickel 1.17.0.
 
@@ -90,9 +94,83 @@ let merge_all = fun fragments =>
   std.array.fold_left merge_compose init fragments
 in
 
+# Extract the volume name from a service volume reference.
+#   "web-data:/var/www/html" -> "web-data"
+#   "db-data:/var/lib/postgres/data" -> "db-data"
+#   "web-data" -> "web-data"  (short-form reference)
+#   "./data:/data" -> null  (bind mount, not a named volume)
+#   "/abs/path:/container" -> null  (bind mount)
+#   "/var/log:/var/log:rw" -> "/var/log"  (first segment is the source)
+#   "${GOCLAW_DIR}/skills" -> null  (env-var interpolation, not a named volume)
+let vol_name_from_ref = fun ref =>
+  # Split on ":" and take the first segment (the source side).
+  let parts = std.string.split ":" ref in
+  let first = std.array.first parts in
+  # A named volume has no leading "/", no leading "./", no "${"
+  if std.string.is_match "^(/|\\./|\\$\\{)" first then null else first
+in
+
+# Walk all services, collect referenced volume names that aren't
+# already declared at the top level. Returns a record of synthesized
+# entries: { name = null, ... }
+let synthesize_volumes = fun merged =>
+  let services = get_or merged "services" {} in
+  let existing = get_or merged "volumes" {} in
+  let names = std.record.fields services in
+  std.array.fold_left
+    (fun acc n =>
+      let svc = services."%{n}" in
+      let vols = get_or svc "volumes" [] in
+      std.array.fold_left
+        (fun acc2 v =>
+          let name = vol_name_from_ref v in
+          if name == null then acc2
+          else if std.record.has_field name existing then acc2
+          else if std.record.has_field name acc2 then acc2
+          else std.record.insert name null acc2)
+        acc
+        vols)
+    {}
+    names
+in
+
+# Walk all services, collect referenced network names (excluding
+# "default", which compose handles implicitly). Same gap-fill logic
+# as volumes.
+let synthesize_networks = fun merged =>
+  let services = get_or merged "services" {} in
+  let existing = get_or merged "networks" {} in
+  let names = std.record.fields services in
+  std.array.fold_left
+    (fun acc n =>
+      let svc = services."%{n}" in
+      let nets = get_or svc "networks" [] in
+      std.array.fold_left
+        (fun acc2 net =>
+          if net == "default" then acc2
+          else if std.record.has_field net existing then acc2
+          else if std.record.has_field net acc2 then acc2
+          else std.record.insert net null acc2)
+        acc
+        nets)
+    {}
+    names
+in
+
+let synthesize = fun merged =>
+  let new_vols = synthesize_volumes merged in
+  let new_nets = synthesize_networks merged in
+  {
+    services = merged.services,
+    volumes = merge_records merged.volumes new_vols,
+    networks = merge_records merged.networks new_nets,
+  }
+in
+
 # Public entry point: takes a list of fragments, returns merged Compose.
 # Imports this file with `let build = import "./lib/merge.ncl" in`
 # then call `build fragments`.
 fun fragments =>
   let prepped = std.array.map with_defaults fragments in
-  merge_all prepped
+  let merged = merge_all prepped in
+  synthesize merged

@@ -31,6 +31,11 @@ describe "typecheck" && {
     should_succeed
   }
 
+  it "examples/dummy-project/config_no_base.ncl (synthesis demo) typechecks" && {
+    run nickel typecheck "$ROOT/examples/dummy-project/config_no_base.ncl"
+    should_succeed
+  }
+
   it "individual Nickel fragments typecheck" && {
     for frag in \
       "$ROOT/examples/dummy-project/base.ncl" \

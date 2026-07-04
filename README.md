@@ -14,6 +14,7 @@ project:
 - replaces the picker with a single `config.ncl`
 - merges fragments in Nickel with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
+- synthesizes top-level `volumes:` and `networks:` from service references, so a root fragment is optional
 - exports one `compose.yml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
@@ -103,6 +104,46 @@ For each field in the later fragment (`b`):
 `services`, `volumes`, `networks` are unioned across fragments —
 later wins on key collision.
 
+### Top-level synthesis
+
+After merging, the engine scans every service's `volumes` and
+`networks` fields. Named volumes and networks referenced by
+services but not declared at the top level are synthesized as
+`null` body. Bind mounts (`./path:`, `/abs:`, `${VAR}:`) are
+skipped. The `default` network is skipped (compose handles it
+implicitly). Any fragment can pre-declare a top-level entry with
+full config (`driver`, `driver_opts`, etc.) — pre-declared
+entries win over synthesis. So:
+
+```nickel
+# services/web.ncl — declares a service that references web-data
+{
+  services = {
+    web = { image = "nginx:1.27", volumes = ["web-data:/var/www/html"] },
+  },
+}
+```
+
+renders to:
+
+```yaml
+services:
+  web:
+    volumes: ["web-data:/var/www/html"]
+volumes:
+  web-data: null   # synthesized from the service reference
+```
+
+To set NFS drivers or other options, add a top-level declaration
+to any fragment — including inline in `services/web.ncl`:
+
+```nickel
+{
+  services = { web = { volumes = ["web-data:/var/www/html"] } },
+  volumes = { web-data = { driver = "local", driver_opts = { type = "nfs" } } },
+}
+```
+
 ### Defaults
 
 Each service gets these defaults filled in if missing:
@@ -124,7 +165,7 @@ defaults in `lib/merge.ncl`'s `default_service` record.
 let build = import "../lib/merge.ncl" in
 
 let fragments = [
-  import "./compose.yml",
+  import "./base.yml",
   import "./services/web.yml",
   import "./services/db.yml",
   import "./overlays/dev.yml",
@@ -132,6 +173,11 @@ let fragments = [
 
 build fragments
 ```
+
+A root fragment is optional. If your services reference named
+volumes and you don't need to set volume drivers or options,
+skip `base.yml` entirely — the merge engine synthesizes
+top-level declarations from service references.
 
 ## What's not covered yet
 
