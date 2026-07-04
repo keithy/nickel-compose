@@ -174,4 +174,62 @@ describe "dummy-project end-to-end" && {
       true
     fi
   }
+
+  it "wrapper errors when NICKEL_COMPOSE is unset" && {
+    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    if [[ -x "$WRAPPER" ]]; then
+      ERR_LOG="$(pwd)/out/wrapper-unset.stderr"
+      (
+        unset NICKEL_COMPOSE
+        cd "$ROOT/examples/dummy-project"
+        "$WRAPPER" --out /tmp/should-not-be-written.yml >/dev/null 2>"$ERR_LOG"
+      )
+      should_fail
+      grep -q "NICKEL_COMPOSE not set" "$ERR_LOG"
+      should_succeed
+      rm -f "$ERR_LOG" /tmp/should-not-be-written.yml
+    else
+      echo "(skipped)"
+      true
+    fi
+  }
+
+  it "wrapper errors when \$VAR reference expands empty" && {
+    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    if [[ -x "$WRAPPER" ]]; then
+      ERR_LOG="$(pwd)/out/wrapper-empty-var.stderr"
+      (
+        unset MISSING_VAR
+        cd "$ROOT/examples/dummy-project"
+        NICKEL_COMPOSE='$MISSING_VAR' \
+          "$WRAPPER" --out /tmp/should-not-be-written.yml >/dev/null 2>"$ERR_LOG"
+      )
+      should_fail
+      grep -q "expanded to an empty fragment list" "$ERR_LOG"
+      should_succeed
+      rm -f "$ERR_LOG" /tmp/should-not-be-written.yml
+    else
+      echo "(skipped)"
+      true
+    fi
+  }
+
+  it "wrapper errors when --out collides with a fragment" && {
+    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    if [[ -x "$WRAPPER" ]]; then
+      ERR_LOG="$(pwd)/out/wrapper-collision.stderr"
+      (
+        cd "$ROOT/examples/dummy-project"
+        NICKEL_COMPOSE="base.yml:services/web.yml" \
+          "$WRAPPER" --out base.yml >/dev/null 2>"$ERR_LOG"
+      )
+      should_fail
+      grep -q "would clobber source" "$ERR_LOG"
+      should_succeed
+      rm -f "$ERR_LOG"
+    else
+      echo "(skipped)"
+      true
+    fi
+  }
 }
