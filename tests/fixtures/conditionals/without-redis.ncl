@@ -9,7 +9,7 @@
   },
 
   if_present = {
-    "services.redis" = {
+    "services::redis" = {
       services = {
         web = {
           environment = ["REDIS_HOST=redis", "REDIS_PORT=6379"],

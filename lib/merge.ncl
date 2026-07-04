@@ -171,11 +171,12 @@ let synthesize = fun merged =>
   }
 in
 
-# Parse a gate key like "services.redis" or "volumes.cache-data" into
-# {gate_field, gate_value}. Returns null on malformed input. Splits
-# on the first dot only — gate_values may contain dots.
+# Parse a gate key like "services::redis" or "volumes::cache-data"
+# into {gate_field, gate_value}. Returns null on malformed input.
+# Splits on the first "::" only — gate_values may contain dots
+# (e.g. "myapp.v2" is a valid compose service name).
 let parse_gate_key = fun key =>
-  let parts = std.string.split "." key in
+  let parts = std.string.split "::" key in
   let n = std.array.length parts in
   if n < 2 then
     null
@@ -184,13 +185,13 @@ let parse_gate_key = fun key =>
   else
     {
       gate_field = std.array.at 0 parts,
-      gate_value = std.string.join "." (std.array.slice 1 n parts),
+      gate_value = std.string.join "::" (std.array.slice 1 n parts),
     }
 in
 
 # Resolve conditional patches against the merged record. Each
 # top-level entry under if_present or if_absent is a gate:
-# "<field>.<value>". The value of the entry is a patch to apply
+# "<field>::<value>". The value of the entry is a patch to apply
 # to the top-level merged record if the gate condition is met.
 #
 # The patch declares its own top-level structure — the engine
@@ -199,32 +200,36 @@ in
 # fields to a service, it starts with `services:`.
 #
 #   if_present:
-#     services.redis:
+#     services::redis:
 #       services:
 #         web:
 #           environment: [REDIS_HOST=redis]
 #           depends_on: [redis]
 #
 # When `redis` is a service in the merged set, the patch at
-# `if_present.services.redis` is merged into the top-level record.
+# `if_present.services::redis` is merged into the top-level record.
 # The `services:` key in the patch lands at merged.services, so
 # web.environment gains REDIS_HOST=redis and web.depends_on gains
 # redis.
 #
 #   if_absent:
-#     services.postgres:
+#     services::postgres:
 #       services:
 #         db:
 #           image: postgres:16-alpine
 #
 # When `postgres` is NOT a service, the patch at
-# `if_absent.services.postgres` is applied — providing a local
+# `if_absent.services::postgres` is applied — providing a local
 # fallback database.
 #
 # The gate field doesn't have to match the patch's first key. A
-# `volumes.home-data` gate can patch `services.web.environment`
+# `volumes::home-data` gate can patch `services.web.environment`
 # because the engine merges at top level, not scoped to the
 # gate field.
+#
+# The "::" delimiter is used so gate values may contain dots
+# (e.g. service "myapp.v2" works as a gate value without quoting
+# tricks).
 #
 # Both fields are stripped from the output (compose doesn't
 # recognize them).

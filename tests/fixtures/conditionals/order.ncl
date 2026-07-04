@@ -15,7 +15,7 @@
   },
 
   if_absent = {
-    "services.redis" = {
+    "services::redis" = {
       services = {
         web = {
           environment = ["FROM_ABSENT"],
@@ -25,7 +25,7 @@
   },
 
   if_present = {
-    "services.postgres" = {
+    "services::postgres" = {
       services = {
         web = {
           environment = ["FROM_PRESENT"],

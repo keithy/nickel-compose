@@ -11,7 +11,7 @@
   },
 
   if_absent = {
-    "services.postgres" = {
+    "services::postgres" = {
       services = {
         db = { image = "postgres:16-alpine" },
       },
