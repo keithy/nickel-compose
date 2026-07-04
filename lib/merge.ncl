@@ -78,6 +78,8 @@ let with_defaults = fun frag =>
     services = patched,
     volumes = get_or frag "volumes" {},
     networks = get_or frag "networks" {},
+    if_present = get_or frag "if_present" {},
+    if_absent = get_or frag "if_absent" {},
   }
 in
 
@@ -86,11 +88,13 @@ let merge_compose = fun a b =>
     services = merge_records (get_or a "services" {}) (get_or b "services" {}),
     volumes = merge_records (get_or a "volumes" {}) (get_or b "volumes" {}),
     networks = merge_records (get_or a "networks" {}) (get_or b "networks" {}),
+    if_present = merge_records (get_or a "if_present" {}) (get_or b "if_present" {}),
+    if_absent = merge_records (get_or a "if_absent" {}) (get_or b "if_absent" {}),
   }
 in
 
 let merge_all = fun fragments =>
-  let init = { services = {}, volumes = {}, networks = {} } in
+  let init = { services = {}, volumes = {}, networks = {}, if_present = {}, if_absent = {} } in
   std.array.fold_left merge_compose init fragments
 in
 
@@ -167,10 +171,90 @@ let synthesize = fun merged =>
   }
 in
 
+# Parse a gate key like "services.redis" or "volumes.cache-data" into
+# {gate_field, gate_value}. Returns null on malformed input. Splits
+# on the first dot only — gate_values may contain dots.
+let parse_gate_key = fun key =>
+  let parts = std.string.split "." key in
+  let n = std.array.length parts in
+  if n < 2 then
+    null
+  else if n == 2 then
+    { gate_field = std.array.at 0 parts, gate_value = std.array.at 1 parts }
+  else
+    {
+      gate_field = std.array.at 0 parts,
+      gate_value = std.string.join "." (std.array.slice 1 n parts),
+    }
+in
+
+# Resolve conditional patches against the merged record. Each
+# top-level entry under if_present or if_absent is a gate:
+# "<field>.<value>". The value of the entry is a patch to apply
+# to the top-level merged record if the gate condition is met.
+#
+#   if_present:
+#     services.redis:
+#       web:
+#         environment: [REDIS_HOST=redis]
+#
+# When `redis` is a service in the merged set, the patch at
+# `if_present.services.redis` is merged into the top-level record
+# via merge_records — so `web.environment` gets REDIS_HOST=redis.
+#
+#   if_absent:
+#     services.postgres:
+#       db:
+#         image: postgres:16-alpine
+#
+# When `postgres` is NOT a service, the patch at
+# `if_absent.services.postgres` is applied — providing a local
+# fallback database.
+#
+# The patch structure doesn't have to mirror the gate field: a
+# `volumes.X` gate can patch `services.web.environment`, since
+# the engine merges the patch into the top-level record (not
+# scoped to the gate field).
+#
+# Both fields are stripped from the output (compose doesn't
+# recognize them).
+let resolve_gates = fun merged conditionals should_apply =>
+  let keys = std.record.fields conditionals in
+  std.array.fold_left
+    (fun acc key =>
+      let parsed = parse_gate_key key in
+      if parsed == null then acc
+      else
+        let section = get_or acc parsed.gate_field {} in
+        let gate_met = std.record.has_field parsed.gate_value section in
+        if should_apply gate_met then
+          merge_records acc conditionals."%{key}"
+        else acc)
+    merged
+    keys
+in
+
+let resolve_conditionals = fun merged =>
+  # Order matters: if_absent resolves first, then if_present. If
+  # both touch the same field, the later (if_present) patch wins,
+  # which is the conventional "explicit presence wins over default
+  # absence" semantic.
+  let after_absent = resolve_gates merged
+    (get_or merged "if_absent" {})
+    (fun gate_met => if gate_met then false else true) in
+  let after_present = resolve_gates after_absent
+    (get_or after_absent "if_present" {})
+    (fun gate_met => gate_met) in
+  # Drop both fields from the output. compose doesn't recognize
+  # them and they shouldn't leak into the rendered yaml.
+  std.record.remove "if_present" (std.record.remove "if_absent" after_present)
+in
+
 # Public entry point: takes a list of fragments, returns merged Compose.
 # Imports this file with `let build = import "./lib/merge.ncl" in`
 # then call `build fragments`.
 fun fragments =>
   let prepped = std.array.map with_defaults fragments in
   let merged = merge_all prepped in
-  synthesize merged
+  let resolved = resolve_conditionals merged in
+  synthesize resolved
