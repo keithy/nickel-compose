@@ -14,7 +14,7 @@
 # current NICKEL_COMPOSE (which references COMPOSE_SERVICES,
 # COMPOSE_OVERLAYS, COMPOSE_FILE). The wrapper assembles the
 # fragment list in order. See WORKFLOW.md for migration stages.
-cd = "QUIET=true ./wrappers/from-nickel-compose.sh"
+cd = "QUIET=true ../../wrappers/from-nickel-compose.sh"
 
 [env]
 # Migration stage 1: services / overlays / file in separate env vars.

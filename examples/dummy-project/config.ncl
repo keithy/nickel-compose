@@ -11,8 +11,8 @@
 #   order.
 #
 # If you prefer to drive the fragment list from an environment
-# variable, see `wrappers/from-compose-file.sh` in this directory —
-# it reads $COMPOSE_FILE, generates a temporary config.ncl with literal
+# variable, see `../../wrappers/from-compose-file.sh` — it reads
+# $COMPOSE_FILE, generates a temporary config.ncl with literal
 # imports, and runs nickel export.
 
 let build = import "../../lib/merge.ncl" in

@@ -17,14 +17,7 @@ jobs:
         run: mise trust && mise install
 
       - name: Run test suite
+        # Runs typecheck, merge, and dummy-project specs. The
+        # podclaws spec self-skips when /code/podclaws/ isn't
+        # available (CI), so it never fails here.
         run: mise run test
-
-      - name: Run podclaws example end-to-end
-        # The example imports /code/podclaws/... absolute paths, which
-        # won't resolve in CI. Skip the podclaws check there.
-        run: |
-          ./tests/run.sh || {
-            echo "::warning::Podclaws example skipped (paths not present in CI)"
-            exit 0
-          }
-        continue-on-error: true

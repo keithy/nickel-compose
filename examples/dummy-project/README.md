@@ -1,8 +1,9 @@
 # dummy-project — first-time user example
 
 A self-contained example showing how to add nickel-compose to an
-existing podman/docker-compose project. No external dependencies —
-everything you need is in this directory.
+existing podman/docker-compose project. Compose fragments live here;
+the wrapper scripts that drive the merge live at the nickel-compose
+repo root (`../../wrappers/`).
 
 ## What's here
 
@@ -15,12 +16,13 @@ dummy-project/
 ├── overlays/
 │   └── dev.yml              # local development overlay (adds redis, exposes db)
 ├── config.ncl               # the Nickel entry point (literal fragment list)
-├── wrappers/
-│   ├── from-compose-file.sh # COMPOSE_FRAGMENTS-driven (Stage 0)
-│   └── from-nickel-compose.sh # NICKEL_COMPOSE-driven (Stages 0-1)
 └── mise/
     └── config.toml          # tools + cd hook + task includes
 ```
+
+The wrappers (`from-compose-file.sh`, `from-nickel-compose.sh`) live
+at the nickel-compose repo root (`../../wrappers/`). The mise cd hook
+in this directory points there.
 
 The root fragment is named `base.yml`, not `compose.yml`, because
 `compose.yml` is reserved as the merged output filename (auto-picked
@@ -64,7 +66,7 @@ don't collide.
 
 ```bash
 COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-  ./wrappers/from-compose-file.sh
+  ../../wrappers/from-compose-file.sh
 ```
 
 Internally the wrapper generates a temporary `config.ncl` with literal
@@ -97,7 +99,7 @@ or:
 ```bash
 # Option B — COMPOSE_FRAGMENTS-driven
 export COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
-./wrappers/from-compose-file.sh
+../../wrappers/from-compose-file.sh
 podman-compose config
 ```
 
@@ -133,8 +135,9 @@ your current `COMPOSE_FRAGMENTS`.
    ```bash
    git submodule add https://github.com/keithy/nickel-compose.git nickel-compose
    ```
-2. Copy `config.ncl` (Option A) and/or `wrappers/from-compose-file.sh`
-   (Option B) into your project.
+2. Copy `config.ncl` (Option A) into your project. For Option B,
+   reference the wrapper from the nickel-compose install (e.g.
+   `$NC_ROOT/wrappers/from-compose-file.sh`).
 3. Edit the fragment list or COMPOSE_FILE to match your project.
 4. Add the cd hook to your `mise.toml`.
 5. `mise trust && mise install`
@@ -160,12 +163,12 @@ fragments in `config.ncl` directly). The wrapper reads it as-is.
   `${VAR}` in a fragment. Comment out fragments one at a time to find
   the offender.
 - **Want to update golden test snapshots** — see top-level
-  `tests/merge_spec.sh`; run with `INIT=true mise run test` from the
-  repo root.
+  `tests/_run.sh`; run `INIT=true ./tests/_run.sh` from the repo root.
 
 ## Verified
 
 This dummy project is exercised by the bash-spec test suite at the
-repo root (`tests/merge_spec.sh`, "end-to-end with dummy-project
-example" context). 6 assertions cover service union, env concat,
-port merge, named volumes, and podman-compose validation.
+repo root (`tests/dummy_project_spec.sh`). 19 assertions cover
+service union, env concat, port merge, named volumes,
+podman-compose validation, and the three `NICKEL_COMPOSE` wrapper
+variants (Stage 0, Stage 1, mixed literal/env-var refs).

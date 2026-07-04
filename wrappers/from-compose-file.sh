@@ -63,9 +63,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# nickel-compose root is three levels up from this script:
-# examples/dummy-project/wrappers/ -> examples/dummy-project/ -> examples/ -> <repo root>
-NC_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# nickel-compose root is the parent of this script (wrappers/ lives
+# at the repo root, alongside lib/).
+NC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Paths in COMPOSE_FRAGMENTS are resolved relative to cwd, like docker-compose.
 CWD="$(pwd)"
 

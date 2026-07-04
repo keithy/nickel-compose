@@ -42,7 +42,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NC_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# nickel-compose root is the parent of this script.
+NC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CWD="$(pwd)"
 
 OUT="compose.yml"
