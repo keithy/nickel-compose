@@ -1,0 +1,22 @@
+# tests/fixtures/podclaws-patterns/03-overlay.yml
+#
+# Overlay that adds more env entries, more volume references, and
+# a cap_add list. Exercises array concat on multiple array_fields.
+
+services:
+  app:
+    environment:
+      - OVERLAY_VAR=from-overlay
+      - HOME=/app   # same key as base — later wins on scalar
+
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+
+    volumes:
+      - cache-data:/var/cache   # references a named volume
+
+  cache:
+    image: redis:7-alpine
+    volumes:
+      - cache-data:/data

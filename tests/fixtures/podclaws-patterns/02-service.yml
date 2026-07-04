@@ -1,0 +1,44 @@
+# tests/fixtures/podclaws-patterns/02-service.yml
+#
+# Service fragment exercising the patterns that /code/podclaws/
+# fragments use but the synthetic merge_spec fixture doesn't:
+#
+#   - build.context with ${VAR} interpolation (record-recurse)
+#   - ports with ${VAR:-default} syntax (long-form binding)
+#   - environment with ${VAR:?error} syntax (required env)
+#   - volumes with all three bind-mount shapes:
+#       ./relative:/container       (relative path)
+#       /abs/path:/container        (absolute path)
+#       ${VAR}/path:/container      (env-var interpolated)
+#     none of these should be synthesized as named volumes
+#   - env_file as object form (record, not string)
+#   - command as array (vs string in dummy-project)
+
+services:
+  app:
+    image: localhost/app:current
+    build:
+      context: ${APP_DIR}/..
+
+    command: ["/bin/app"]
+
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+    env_file:
+      - path: .env
+        required: false
+
+    environment:
+      - HOME=/app
+      - APP_DATA_DIR=/app/data
+      - REQUIRED_TOKEN=${REQUIRED_TOKEN:?set REQUIRED_TOKEN before running}
+
+    volumes:
+      - ./relative/dir:/container/rel:ro
+      - /abs/path:/container/abs:ro
+      - ${APP_DIR}/skills:/container/skills
+      - shared-cache   # short-form (no colon) — this IS a named volume reference
+
+    depends_on:
+      - cache

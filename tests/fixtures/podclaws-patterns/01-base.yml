@@ -1,0 +1,10 @@
+# tests/fixtures/podclaws-patterns/01-base.yml
+#
+# Minimal root fragment for the podclaws-patterns fixture.
+# Captures: top-level networks declaration (no volumes — let
+# synthesis fill them from services), the conventional
+# `default: bridge` shape.
+
+networks:
+  default:
+    driver: bridge

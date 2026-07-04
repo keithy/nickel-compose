@@ -54,12 +54,17 @@ describe "dummy-project end-to-end" && {
     # No base fragment, but the merge engine scans service volume
     # references and synthesizes top-level declarations. The result
     # should be valid compose — podman-compose config accepts it.
+    # We render BOTH yaml (for podman-compose validation) and json
+    # (for jq structural assertions — jq doesn't read YAML).
     run nickel export --format yaml "$ROOT/examples/dummy-project/config_no_base.ncl" \
       | sed -n '2,$p' > "out/dummy/compose-no-base.yml"
     should_succeed
+    run nickel export --format json "$ROOT/examples/dummy-project/config_no_base.ncl" \
+      > "out/dummy/compose-no-base.json"
+    should_succeed
     # The synthesized top-level volumes: web-data, db-data.
-    expect_jq "out/dummy/compose-no-base.yml" '.volumes | has("web-data")' to_be "true"
-    expect_jq "out/dummy/compose-no-base.yml" '.volumes | has("db-data")'  to_be "true"
+    expect_jq "out/dummy/compose-no-base.json" '.volumes | has("web-data")' to_be "true"
+    expect_jq "out/dummy/compose-no-base.json" '.volumes | has("db-data")'  to_be "true"
     if command -v podman-compose >/dev/null 2>&1; then
       podman-compose -f "out/dummy/compose-no-base.yml" config >/dev/null
       should_succeed
