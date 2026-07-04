@@ -20,4 +20,25 @@ describe "typecheck" && {
     run nickel typecheck "$ROOT/examples/dummy-project/config.ncl"
     should_succeed
   }
+
+  it "examples/dummy-project/config_ncl.ncl (all Nickel) typechecks" && {
+    run nickel typecheck "$ROOT/examples/dummy-project/config_ncl.ncl"
+    should_succeed
+  }
+
+  it "examples/dummy-project/config_mixed.ncl (mixed YAML+Nickel) typechecks" && {
+    run nickel typecheck "$ROOT/examples/dummy-project/config_mixed.ncl"
+    should_succeed
+  }
+
+  it "individual Nickel fragments typecheck" && {
+    for frag in \
+      "$ROOT/examples/dummy-project/base.ncl" \
+      "$ROOT/examples/dummy-project/services/web.ncl" \
+      "$ROOT/examples/dummy-project/services/db.ncl" \
+      "$ROOT/examples/dummy-project/overlays/dev.ncl"; do
+      run nickel typecheck "$frag"
+      should_succeed
+    done
+  }
 }

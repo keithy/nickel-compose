@@ -36,6 +36,20 @@ describe "dummy-project end-to-end" && {
     expect_no_diff "out/dummy/compose.yml" "expected/dummy/compose.yml"
   }
 
+  it "config_ncl.ncl (all Nickel) produces byte-identical output" && {
+    run nickel export --format yaml "$ROOT/examples/dummy-project/config_ncl.ncl" \
+      | sed -n '2,$p' > "out/dummy/compose-ncl.yml"
+    should_succeed
+    expect_no_diff "out/dummy/compose-ncl.yml" "expected/dummy/compose.yml"
+  }
+
+  it "config_mixed.ncl (mixed YAML + Nickel) produces byte-identical output" && {
+    run nickel export --format yaml "$ROOT/examples/dummy-project/config_mixed.ncl" \
+      | sed -n '2,$p' > "out/dummy/compose-mixed.yml"
+    should_succeed
+    expect_no_diff "out/dummy/compose-mixed.yml" "expected/dummy/compose.yml"
+  }
+
   it "all three services present (web, db, redis)" && {
     expect_jq "out/dummy/compose.json" '.services | has("web")'   to_be "true"
     expect_jq "out/dummy/compose.json" '.services | has("db")'    to_be "true"
