@@ -49,6 +49,7 @@ not to mention the availability of write-time validation.
 | No typecheck | Contracts. Missing field → typecheck error with file:line, before any container starts. Per-fragment contracts as needed (`GoclawBase`, `PostgresBase`, etc.). |
 | Not composable | One merge engine in `lib/merge.ncl`. `array_fields` list controls concat-vs-replace. Records recurse. Records union at the top level. All explicit, all in one file, all readable. |
 | Needs `base.yml` | The merge engine synthesizes top-level `volumes:` and `networks:` from service references. No root fragment required for projects with named volumes — the engine extracts `<name>:/path` patterns from `services.<svc>.volumes` and emits `volumes: { <name> = null }`. Pre-declared entries (with `driver`, `driver_opts`, etc.) win over synthesis. Bind mounts (`./path:`, `/abs:`, `${VAR}:`) are skipped. The `default` network is skipped (compose handles it implicitly). |
+| Cross-fragment references | `if_present::services::redis` and `if_absent::services::postgres` — a fragment can declare patches that fire only when specific keys exist (or don't) in the merged record. The patch declares its own top-level structure; the engine merges at the top level. Resolution order: `if_absent` first, then `if_present`. Both fields are stripped from output. |
 | Order matters silently | Order still matters for `b wins on collision` semantics — that's intrinsic to overlay composition. But the typecheck catches missing required keys regardless of order, and the merge engine's behavior is the same in both directions of any two-fragment merge. |
 
 ## The two-way bet
@@ -189,10 +190,11 @@ The LLM that writes compose YAML produces something:
 ## Status
 
 The merge engine (`lib/merge.ncl`) with **top-level volume and
-network synthesis**, the typecheck scaffolding, and the wrapper
-are working. The example (dummy-project) shows both authoring
-modes (literal list in `config.ncl`, `NICKEL_COMPOSE`-driven
-wrapper) plus three Nickel-native configs (`config_ncl.ncl`,
+network synthesis**, **conditional patches** (`if_present` and
+`if_absent`), the typecheck scaffolding, and the wrapper are
+working. The example (dummy-project) shows both authoring modes
+(literal list in `config.ncl`, `NICKEL_COMPOSE`-driven wrapper)
+plus three Nickel-native configs (`config_ncl.ncl`,
 `config_mixed.ncl`, `config_no_base.ncl`) demonstrating the
 migration stages and the synthesis feature. The dual-direction
 bet is proven.

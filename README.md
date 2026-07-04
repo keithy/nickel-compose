@@ -15,6 +15,7 @@ project:
 - merges fragments in Nickel with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
 - synthesizes top-level `volumes:` and `networks:` from service references, so a root fragment is optional
+- supports conditional patches (`if_present`, `if_absent`) so a fragment can adapt to what else is selected
 - exports one `compose.yaml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
@@ -145,6 +146,46 @@ to any fragment — including inline in `services/web.ncl`:
   volumes = { web-data = { driver = "local", driver_opts = { type = "nfs" } } },
 }
 ```
+
+### Conditional patches
+
+Fragments can declare patches that fire only when a specific
+service, volume, or network is (or isn't) selected. Two
+conditionals: `if_present` and `if_absent`. Each top-level key
+under them is a gate in the form `"<field>::<value>"` (double
+colon so gate values can contain dots). The value is a patch
+record that gets merged at the top level when the gate is met.
+
+```yaml
+# dev.yml — patches web only when redis is selected
+if_present:
+  services::redis:
+    services:
+      web:
+        environment: [REDIS_HOST=redis]
+        depends_on: [redis]
+
+# If you skip redis, web stays dependency-free.
+```
+
+```yaml
+# fallback.yml — provide a local DB when no external postgres
+if_absent:
+  services::postgres:
+    services:
+      db: { image: postgres:16-alpine }
+```
+
+Resolution order: `if_absent` first, then `if_present`. If both
+touch the same field, `if_present` wins (explicit presence beats
+default absence). Both fields are stripped from the rendered
+output — compose doesn't recognize them.
+
+The gate field doesn't have to match the patch's first key. A
+`volumes::home-data` gate can patch `services.web.environment`,
+because the engine merges the patch at the top level via
+`merge_records` — the patch's structure determines where it
+lands.
 
 ### Defaults
 

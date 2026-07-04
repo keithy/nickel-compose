@@ -248,6 +248,65 @@ comments. Single `compose.ncl` becomes the whole deployment.
 
 ---
 
+## Conditional composition
+
+Fragments can declare patches that fire only when a specific
+service, volume, or network is (or isn't) selected. Two
+conditionals: `if_present` and `if_absent`. Each top-level key
+is a gate in the form `"<field>::<value>"` (double colon so
+gate values can contain dots). The value is a patch record that
+gets merged at the top level when the gate is met.
+
+```nickel
+# dev.ncl
+{
+  if_present = {
+    services::redis = {
+      services = {
+        web = {
+          environment = ["REDIS_HOST=redis"],
+          depends_on = ["redis"],
+        },
+      },
+    },
+  },
+}
+```
+
+When `redis` is in the merged services, `web` gets `REDIS_HOST`
+and depends on redis. If the user skips redis in their
+selection, the patch doesn't fire and `web` stays
+dependency-free.
+
+`if_absent` is the inverse — the patch fires when the gate is
+absent:
+
+```nickel
+{
+  if_absent = {
+    services::postgres = {
+      services = {
+        db = { image = "postgres:16-alpine" },
+      },
+    },
+  },
+}
+```
+
+If `postgres` is selected, the local fallback is skipped. If not,
+a local `db` service is added.
+
+Resolution order: `if_absent` first, then `if_present`. If both
+touch the same field, `if_present` wins (explicit presence
+beats default absence). Both fields are stripped from the
+rendered output.
+
+The gate field doesn't have to match the patch's first key. A
+`volumes::home-data` gate can patch `services.web.environment`
+because the engine merges the patch at the top level via
+`merge_records` — the patch's structure determines where it
+lands.
+
 ## What this gives the user
 
 - **Stage 0** is zero-work. Set `NICKEL_COMPOSE=$COMPOSE_FILE`
