@@ -37,7 +37,7 @@ not to mention the availability of write-time validation.
 | `COMPOSE_FILE=a:b:c` | Clumsy. `.env` file requires single line values. No expansion of env vars. Ordered colon-separated idiom is barely fit for purpose |
 | No typecheck | A typo in a service name, a wrong env var name, a missing required field — all pass compose validation and fail at `podman compose up`. Container start is the worst place to discover a typo, and runtime error messages are not always helpful |
 | Not composable | Overlays merge via `!reset`, anchor merge (`*alias`, `&alias`), `${VAR:?msg}`. Each is a YAML loader quirk or a Compose extension. Knowledge of these is tribal, not in the type system. |
-| Needs `base.yml` | The output filename `compose.yml` collides with the conventional root fragment name. Workaround: rename the root. Workaround-of-the-workaround: write a tiny file that just declares `networks` and `volumes`. |
+| Needs `base.yml` | Podclaws uses `compose.yml` as its root fragment name (per their existing convention). Since `compose.yaml` (the canonical rendered output) and `compose.yml` (the root fragment) are different extensions, there's no collision — but the convention `.yml` for fragments and `.yaml` for whole-deployment is what makes the distinction legible. |
 | Order matters silently | Wrong order = silently wrong overlay. No warning, no validation. Compose's "later wins" is a rule humans have to remember, not a property of the description. |
 
 ## What nickel-compose fixes
@@ -55,7 +55,7 @@ not to mention the availability of write-time validation.
 
 Nickel-compose supports two authoring modes, both first-class:
 
-### Decompose: many fragments → one merged `compose.yml`
+### Decompose: many fragments → one merged `compose.yaml`
 
 For projects that want git-diff-friendly per-service files:
 
@@ -71,10 +71,10 @@ config.ncl    # imports the above
 ```
 
 `config.ncl` lists the fragments, the merge engine combines them,
-`compose.yml` is the output. Each YAML is small, reviewable,
+`compose.yaml` is the output. Each YAML is small, reviewable,
 focused.
 
-### Monolith: one big `config.ncl` → one `compose.yml`
+### Monolith: one big `config.ncl` → one `compose.yaml`
 
 For projects (or LLMs) that want one file with all the comments
 in a sensible order:
@@ -212,7 +212,7 @@ These are the next abstraction bumps.
 ## The bigger bet: a deployment model, not just a compose tool
 
 If nickel-compose can describe a deployment as a typed record
-and emit valid `compose.yml`, the same record can emit valid
+and emit valid `compose.yaml`, the same record can emit valid
 Kubernetes manifests. Helm charts. Nomad jobs. Anything that
 takes a declarative description of "what should run" and turns
 it into a runtime config.
@@ -226,7 +226,7 @@ volumes, networks, dependencies, env vars, ports.
 Concretely, once the merge engine produces a clean `Compose`
 record:
 
-- `nickel compose render config.ncl` → `compose.yml`
+- `nickel compose render config.ncl` → `compose.yaml`
 - `nickel k8s render config.ncl` → Deployment + Service + PVC
   manifests
 - `nickel helm render config.ncl` → `Chart.yaml` + `values.yaml`

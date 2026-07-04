@@ -31,8 +31,8 @@ The wrapper `from-nickel-compose.sh` lives at the nickel-compose
 repo root (`../../wrappers/`). The mise cd hook in this directory
 points there.
 
-The root fragment is named `base.yml`, not `compose.yml`, because
-`compose.yml` is reserved as the merged output filename (auto-picked
+The root fragment is named `base.yml`, not `compose.yaml`, because
+`compose.yaml` is reserved as the merged output filename (auto-picked
 by podman-compose and docker compose). Naming the source `base.yml`
 avoids any collision.
 
@@ -61,7 +61,7 @@ What happens:
    indirect-expands it to the literal fragment list.
 2. The wrapper generates a temp `compose.ncl` with literal `import`
    lines for each fragment.
-3. `nickel export` runs against that temp file, writing `compose.yml`.
+3. `nickel export` runs against that temp file, writing `compose.yaml`.
 
 Your existing `COMPOSE_FILE` is **untouched**. If you `unset
 NICKEL_COMPOSE`, you're back to whatever your previous workflow was.
@@ -91,7 +91,7 @@ This is the simplest setup — no environment variable required.
 
 If you already maintain a list of fragments in env vars (in `.env`,
 `.bashrc`, mise `[env]`, etc.), the wrapper reads `NICKEL_COMPOSE`
-and renders `compose.yml`. `NICKEL_COMPOSE` is a colon-separated
+and renders `compose.yaml`. `NICKEL_COMPOSE` is a colon-separated
 list where each token is either a literal fragment path or a `$VAR`
 reference (which expands to another colon-separated list). Mixed
 forms are allowed:
@@ -119,7 +119,7 @@ Nickel 1.17 requires `import` paths to be literals at parse time —
 runtime paths aren't supported. The wrapper bridges that gap.
 
 When you run `podman-compose up`, podman-compose reads the merged
-`compose.yml` (the conventional name) — no `COMPOSE_FILE` env
+`compose.yaml` (the conventional name) — no `COMPOSE_FILE` env
 needed at runtime, since the merged file is the only input.
 
 See [WORKFLOW.md](../../WORKFLOW.md) for the full migration story
@@ -152,7 +152,7 @@ podman-compose config
 
 ## What gets merged
 
-Both options produce the same `compose.yml`. Render it and look:
+Both options produce the same `compose.yaml`. Render it and look:
 
 - `db` service: image + env from `db.yml`, plus the `5432:5432` port
   from `overlays/dev.yml`. Defaults `networks`/`restart`/`init`
@@ -161,11 +161,11 @@ Both options produce the same `compose.yml`. Render it and look:
   from `overlays/dev.yml` (concat). Ports and depends_on from
   `web.yml`.
 - `redis` service: added by `overlays/dev.yml` (sibling service).
-- Named volumes `web-data`, `db-data`: declared in `compose.yml`.
+- Named volumes `web-data`, `db-data`: declared in `compose.yaml`.
 
 ## The mise cd hook
 
-To keep `compose.yml` fresh without running anything manually,
+To keep `compose.yaml` fresh without running anything manually,
 wire the wrapper into your project's `mise.toml`:
 
 ```toml
@@ -176,7 +176,7 @@ cd = "QUIET=true $NC_ROOT/wrappers/from-nickel-compose.sh"
 (where `$NC_ROOT` is the path to your nickel-compose install —
 submodule, vendor copy, or `mise x --` invocation).
 
-Now every `cd` into the project regenerates `compose.yml` from
+Now every `cd` into the project regenerates `compose.yaml` from
 your current `NICKEL_COMPOSE`.
 
 ## Migrating your own project
@@ -191,7 +191,7 @@ your current `NICKEL_COMPOSE`.
    from a cd hook or `mise run render`.
 3. Add the cd hook to your `mise.toml`.
 4. `mise trust && mise install`
-5. `cd` into the project — `compose.yml` appears.
+5. `cd` into the project — `compose.yaml` appears.
 
 If you already have a fragment list set in `.env` or `.bashrc` as
 `COMPOSE_FILE`, set `NICKEL_COMPOSE='$COMPOSE_FILE'` (Stage 0) and
@@ -207,8 +207,8 @@ the wrapper does the rest. No env var rename needed.
   `NICKEL_COMPOSE` are relative to cwd.
 - **`output path ... is also a fragment`** — your fragment list
   includes a file with the same name as the output (default
-  `compose.yml`). Either rename the source fragment (e.g. to
-  `base.yml`) or pass `--out merged-compose.yml` to the wrapper.
+  `compose.yaml`). Either rename the source fragment (e.g. to
+  `base.yml`) or pass `--out merged-compose.yaml` to the wrapper.
 - **`podman-compose config` rejects output** — usually a malformed
   `${VAR}` in a fragment. Comment out fragments one at a time to find
   the offender.

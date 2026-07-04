@@ -20,7 +20,7 @@ SCRIPT="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
 
 CONFIG="config.ncl"
-OUT="compose.yml"
+OUT="compose.yaml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -6,7 +6,7 @@ A deployment in nickel-compose is one `.ncl` file that renders to
 one compose file. The workflow is:
 
 ```
-compose.ncl   ──[nickel export]──>   compose.yml   ──[podman compose]──>   containers
+compose.ncl   ──[nickel export]──>   compose.yaml   ──[podman compose]──>   containers
 prod.ncl      ──[nickel export]──>   prod.yml      ──[podman compose]──>   containers
 staging.ncl   ──[nickel export]──>   staging.yml   ──[podman compose]──>   containers
 ```
@@ -19,7 +19,7 @@ To create a new deployment:
 
 1. Write `compose.ncl` (or any name) with the typed `Compose`
    record.
-2. Run `nickel export --format yaml compose.ncl > compose.yml`.
+2. Run `nickel export --format yaml compose.ncl > compose.yaml`.
 3. Run `podman-compose up -d`.
 
 That's the core. Everything else is migration tooling to get
@@ -138,7 +138,7 @@ What happens:
    indirect-expands it to the literal fragment list.
 2. The wrapper generates a temp `compose.ncl` with literal `import`
    lines for each fragment.
-3. `nickel export` runs against that temp file, writing `compose.yml`.
+3. `nickel export` runs against that temp file, writing `compose.yaml`.
 
 Your existing `COMPOSE_FILE` is **untouched**. If you `unset
 NICKEL_COMPOSE`, you're back to whatever your previous workflow was.
@@ -232,7 +232,7 @@ build fragments
 ```
 
 Drop the env vars. `nickel export --format yaml compose.ncl >
-compose.yml` is now the build step. The wrapper is no longer
+compose.yaml` is now the build step. The wrapper is no longer
 used; `NICKEL_COMPOSE` is removed from the environment.
 
 If your services reference named volumes and you don't need to

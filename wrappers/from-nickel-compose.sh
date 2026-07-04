@@ -46,7 +46,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CWD="$(pwd)"
 
-OUT="compose.yml"
+OUT="compose.yaml"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --out)

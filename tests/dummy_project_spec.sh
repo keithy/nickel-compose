@@ -23,7 +23,7 @@ describe "dummy-project end-to-end" && {
 
   it "renders YAML without error" && {
     mkdir -p "out/dummy"
-    run nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "out/dummy/compose.yml"
+    run nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "out/dummy/compose.yaml"
     should_succeed
   }
 
@@ -33,21 +33,21 @@ describe "dummy-project end-to-end" && {
   }
 
   it "YAML output matches expected snapshot" && {
-    expect_no_diff "out/dummy/compose.yml" "expected/dummy/compose.yml"
+    expect_no_diff "out/dummy/compose.yaml" "expected/dummy/compose.yaml"
   }
 
   it "config_ncl.ncl (all Nickel) produces byte-identical output" && {
     run nickel export --format yaml "$ROOT/examples/dummy-project/config_ncl.ncl" \
       | sed -n '2,$p' > "out/dummy/compose-ncl.yml"
     should_succeed
-    expect_no_diff "out/dummy/compose-ncl.yml" "expected/dummy/compose.yml"
+    expect_no_diff "out/dummy/compose-ncl.yml" "expected/dummy/compose.yaml"
   }
 
   it "config_mixed.ncl (mixed YAML + Nickel) produces byte-identical output" && {
     run nickel export --format yaml "$ROOT/examples/dummy-project/config_mixed.ncl" \
       | sed -n '2,$p' > "out/dummy/compose-mixed.yml"
     should_succeed
-    expect_no_diff "out/dummy/compose-mixed.yml" "expected/dummy/compose.yml"
+    expect_no_diff "out/dummy/compose-mixed.yml" "expected/dummy/compose.yaml"
   }
 
   it "config_no_base.ncl validates: engine synthesizes top-level volumes from services" && {
@@ -126,7 +126,7 @@ EOF
 
   it "validates through podman-compose" && {
     if command -v podman-compose >/dev/null 2>&1; then
-      podman-compose -f "out/dummy/compose.yml" config >/dev/null
+      podman-compose -f "out/dummy/compose.yaml" config >/dev/null
       should_succeed
     else
       echo "(skipped)"
@@ -147,8 +147,8 @@ EOF
       )
       should_succeed
 
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yml" | head -20
+      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
         echo "literal-path wrapper output differs"
         false
       fi
@@ -173,8 +173,8 @@ EOF
       )
       should_succeed
 
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yml" | head -20
+      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
         echo "stage 0 wrapper output differs"
         false
       fi
@@ -201,8 +201,8 @@ EOF
       )
       should_succeed
 
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yml" | head -20
+      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
         echo "stage 1 wrapper output differs"
         false
       fi
@@ -228,8 +228,8 @@ EOF
       )
       should_succeed
 
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yml" | head -20
+      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
         echo "mixed form wrapper output differs"
         false
       fi

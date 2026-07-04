@@ -1,7 +1,7 @@
 # nickel-compose
 
 Nickel-driven compose: import YAML fragments, merge with Compose
-semantics, export a single `compose.yml`.
+semantics, export a single `compose.yaml`.
 
 ## Why
 
@@ -15,13 +15,15 @@ project:
 - merges fragments in Nickel with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
 - synthesizes top-level `volumes:` and `networks:` from service references, so a root fragment is optional
-- exports one `compose.yml` that both `podman-compose` and
+- exports one `compose.yaml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
 `NICKEL_COMPOSE` (the input list) is intentionally distinct from
 `COMPOSE_FILE` (which compose tools reserve for the merged output).
-A source fragment named `compose.yml` would collide with the output —
-rename it (e.g. to `base.yml`).
+Nickel-compose follows the convention `.yml` for input fragments
+and `.yaml` for the rendered whole — never name a source fragment
+`compose.yaml`, since that's reserved for the merged output that
+both `podman-compose` and `docker compose` auto-pick.
 
 ## Install
 
@@ -46,8 +48,8 @@ mise run render -- config=path out=path   # render a custom config
 Or directly:
 
 ```bash
-./nickel-render.sh --config examples/podclaws/config.ncl --out compose.yml
-nickel export --format yaml examples/podclaws/config.ncl > compose.yml
+./nickel-render.sh --config examples/podclaws/config.ncl --out compose.yaml
+nickel export --format yaml examples/podclaws/config.ncl > compose.yaml
 ./tests/merge_spec.sh                 # bash-spec test runner
 ```
 
@@ -74,7 +76,7 @@ In normal runs (no `INIT`), tests fail if `tests/out/` and
 ## How it works
 
 ```
-config.ncl  --[nickel export]-->  compose.yml  --[podman compose]-->  containers
+config.ncl  --[nickel export]-->  compose.yaml  --[podman compose]-->  containers
    |
    +-- imports YAML fragments
    +-- applies defaults per service
@@ -215,7 +217,7 @@ nickel-compose/
 │   ├── config.toml            # tools (nickel, jq) + task config
 │   └── tasks/
 │       ├── check              # typecheck the merge engine
-│       ├── render             # render config to compose.yml
+│       ├── render             # render config to compose.yaml
 │       └── test               # run the bash-spec test suite
 ├── nickel-render.sh           # shell wrapper (typecheck + export)
 ├── README.md
