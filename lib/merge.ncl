@@ -193,28 +193,38 @@ in
 # "<field>.<value>". The value of the entry is a patch to apply
 # to the top-level merged record if the gate condition is met.
 #
+# The patch declares its own top-level structure — the engine
+# merges it at the top level via merge_records, and the patch's
+# own keys determine where it lands. If the patch needs to add
+# fields to a service, it starts with `services:`.
+#
 #   if_present:
 #     services.redis:
-#       web:
-#         environment: [REDIS_HOST=redis]
+#       services:
+#         web:
+#           environment: [REDIS_HOST=redis]
+#           depends_on: [redis]
 #
 # When `redis` is a service in the merged set, the patch at
-# `if_present.services.redis` is merged into the top-level record
-# via merge_records — so `web.environment` gets REDIS_HOST=redis.
+# `if_present.services.redis` is merged into the top-level record.
+# The `services:` key in the patch lands at merged.services, so
+# web.environment gains REDIS_HOST=redis and web.depends_on gains
+# redis.
 #
 #   if_absent:
 #     services.postgres:
-#       db:
-#         image: postgres:16-alpine
+#       services:
+#         db:
+#           image: postgres:16-alpine
 #
 # When `postgres` is NOT a service, the patch at
 # `if_absent.services.postgres` is applied — providing a local
 # fallback database.
 #
-# The patch structure doesn't have to mirror the gate field: a
-# `volumes.X` gate can patch `services.web.environment`, since
-# the engine merges the patch into the top-level record (not
-# scoped to the gate field).
+# The gate field doesn't have to match the patch's first key. A
+# `volumes.home-data` gate can patch `services.web.environment`
+# because the engine merges at top level, not scoped to the
+# gate field.
 #
 # Both fields are stripped from the output (compose doesn't
 # recognize them).

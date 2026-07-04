@@ -105,3 +105,35 @@ EOF
     expect_jq "out/without-postgres.json" 'has("if_absent")' to_be "false"
   }
 }
+
+describe "conditional resolution order" && {
+  # When both if_absent and if_present gates are met (in different
+  # fragments), both patches apply. Order: if_absent first, then
+  # if_present. For array fields, both entries concatenate with
+  # if_absent's value first.
+  FIXTURE_ORDER="$ROOT/tests/fixtures/conditionals/order.ncl"
+
+  it "applies both patches in order: if_absent first, then if_present" && {
+    # The order fixture has both conditional blocks. The test adds
+    # a second fragment declaring postgres — that makes the
+    # if_present.services.postgres gate met. The redis service is
+    # NOT declared, so if_absent.services.redis also fires.
+    cat > "out/order.ncl" <<EOF
+$BUILD
+build [
+  import "$FIXTURE_ORDER",
+  { services = { postgres = { image = "postgres:external" } } },
+]
+EOF
+    run nickel export --format json "out/order.ncl" > "out/order.json"
+    should_succeed
+  }
+
+  it "concatenates environment entries from both gates in resolve order" && {
+    # Both patches add to web.environment. Order: FROM_ABSENT
+    # first (if_absent resolves first), then FROM_PRESENT
+    # (if_present resolves second).
+    expect_jq "out/order.json" '.services.web.environment[0]' to_be "FROM_ABSENT"
+    expect_jq "out/order.json" '.services.web.environment[1]' to_be "FROM_PRESENT"
+  }
+}
