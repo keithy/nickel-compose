@@ -2,9 +2,8 @@
 # tests/dummy_project_spec.sh — bash-spec 2.1 end-to-end tests for
 # the examples/dummy-project/ fragment composition workflow.
 #
-# Covers direct export (config.ncl) and the two wrapper entry points
-# (COMPOSE_FRAGMENTS, NICKEL_COMPOSE). Uses golden-file comparison
-# against tests/expected/dummy/ — set INIT=true to regenerate.
+# Covers direct export (config.ncl) and the NICKEL_COMPOSE wrapper
+# under several input shapes (literal paths, $VAR indirection, mixed).
 #
 # Per bash-spec convention, the spec runs in its own directory.
 # Wrapper subshells that `cd` into another dir pass absolute `--out`
@@ -68,25 +67,22 @@ describe "dummy-project end-to-end" && {
     fi
   }
 
-  it "COMPOSE_FRAGMENTS-driven wrapper produces equivalent output" && {
-    WRAPPER="$ROOT/wrappers/from-compose-file.sh"
+  it "NICKEL_COMPOSE literal-only (no \$VAR refs) produces equivalent output" && {
+    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
-      # Write wrapper output to a tmp path so we don't clobber the
-      # source base.yml (which the wrapper would otherwise overwrite
-      # because the default output filename is compose.yml — but if
-      # the source fragment were also compose.yml that would collide,
-      # hence the rename to base.yml in the dummy project).
+      # Literal-path form: NICKEL_COMPOSE='a:b:c' is the same input
+      # shape as the deleted COMPOSE_FRAGMENTS wrapper.
       WRAPPER_OUT="$(pwd)/out/wrapper-output.yml"
       (
         cd "$ROOT/examples/dummy-project"
-        COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+        NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
           "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
       )
       should_succeed
 
       if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yml" >/dev/null 2>&1; then
         diff "$WRAPPER_OUT" "out/dummy/compose.yml" | head -20
-        echo "wrapper output differs from direct export"
+        echo "literal-path wrapper output differs"
         false
       fi
       should_succeed

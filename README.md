@@ -17,7 +17,7 @@ project:
 - exports one `compose.yml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
-`COMPOSE_FRAGMENTS` (the input list) is intentionally distinct from
+`NICKEL_COMPOSE` (the input list) is intentionally distinct from
 `COMPOSE_FILE` (which compose tools reserve for the merged output).
 A source fragment named `compose.yml` would collide with the output —
 rename it (e.g. to `base.yml`).

@@ -2,8 +2,8 @@
 
 A self-contained example showing how to add nickel-compose to an
 existing podman/docker-compose project. Compose fragments live here;
-the wrapper scripts that drive the merge live at the nickel-compose
-repo root (`../../wrappers/`).
+the wrapper that drives the merge from `$NICKEL_COMPOSE` lives at
+the nickel-compose repo root (`../../wrappers/`).
 
 ## What's here
 
@@ -20,21 +20,42 @@ dummy-project/
     └── config.toml          # tools + cd hook + task includes
 ```
 
-The wrappers (`from-compose-file.sh`, `from-nickel-compose.sh`) live
-at the nickel-compose repo root (`../../wrappers/`). The mise cd hook
-in this directory points there.
+The wrapper `from-nickel-compose.sh` lives at the nickel-compose
+repo root (`../../wrappers/`). The mise cd hook in this directory
+points there.
 
 The root fragment is named `base.yml`, not `compose.yml`, because
 `compose.yml` is reserved as the merged output filename (auto-picked
 by podman-compose and docker compose). Naming the source `base.yml`
 avoids any collision.
 
-Two wrappers are shipped. `from-compose-file.sh` reads
-`COMPOSE_FRAGMENTS` (a literal colon list). `from-nickel-compose.sh`
-reads `NICKEL_COMPOSE` (a list of env-var names, each holding a
-colon-separated fragment list). The latter is the recommended
-migration path — see [WORKFLOW.md](../../WORKFLOW.md) for the
-three-stage migration from existing `COMPOSE_FILE` projects.
+## Try it first — Stage 0 (zero work)
+
+If you already maintain a `COMPOSE_FILE` env var (the conventional
+colon-separated YAML list), try nickel-compose in **two lines**, no
+env-var rename:
+
+```bash
+# in your existing setup (shell rc, .env, mise [env], wherever):
+export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+export NICKEL_COMPOSE='$COMPOSE_FILE'
+
+# render via the wrapper:
+../../wrappers/from-nickel-compose.sh
+```
+
+What happens:
+
+1. The wrapper reads `NICKEL_COMPOSE`, sees `$COMPOSE_FILE`, and
+   indirect-expands it to the literal fragment list.
+2. The wrapper generates a temp `compose.ncl` with literal `import`
+   lines for each fragment.
+3. `nickel export` runs against that temp file, writing `compose.yml`.
+
+Your existing `COMPOSE_FILE` is **untouched**. If you `unset
+NICKEL_COMPOSE`, you're back to whatever your previous workflow was.
+This is a non-destructive preview — see the result, then decide
+whether to migrate further.
 
 ## Two ways to drive the merge
 
@@ -45,7 +66,7 @@ edit the `fragments` array:
 
 ```nickel
 let fragments = [
-  import "./compose.yml",
+  import "./base.yml",
   import "./services/web.yml",
   import "./services/db.yml",
   import "./overlays/dev.yml",
@@ -55,18 +76,30 @@ let fragments = [
 Order matters: later fragments override scalars and concat arrays.
 This is the simplest setup — no environment variable required.
 
-### Option B: COMPOSE_FRAGMENTS-driven (wrappers/from-compose-file.sh)
+### Option B: NICKEL_COMPOSE-driven (wrappers/from-nickel-compose.sh)
 
-If you already maintain a list of fragments (in `.env`, `.bashrc`,
-mise `[env]`, etc.) the wrapper script reads `COMPOSE_FRAGMENTS`
-and renders `compose.yml`. The variable is named
-`COMPOSE_FRAGMENTS` (not `COMPOSE_FILE`) because compose tools
-reserve `COMPOSE_FILE` for the merged output path. The two roles
-don't collide.
+If you already maintain a list of fragments in env vars (in `.env`,
+`.bashrc`, mise `[env]`, etc.), the wrapper reads `NICKEL_COMPOSE`
+and renders `compose.yml`. `NICKEL_COMPOSE` is a colon-separated
+list where each token is either a literal fragment path or a `$VAR`
+reference (which expands to another colon-separated list). Mixed
+forms are allowed:
 
 ```bash
-COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-  ../../wrappers/from-compose-file.sh
+# Stage 0 — single env var holding the full list
+export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+NICKEL_COMPOSE='$COMPOSE_FILE' ../../wrappers/from-nickel-compose.sh
+
+# Stage 1 — split into services / overlays / file
+export COMPOSE_SERVICES="services/web.yml:services/db.yml"
+export COMPOSE_OVERLAYS="overlays/dev.yml"
+export COMPOSE_FILE="base.yml"
+NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
+  ../../wrappers/from-nickel-compose.sh
+
+# Literal-only — no env-var indirection at all
+NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+  ../../wrappers/from-nickel-compose.sh
 ```
 
 Internally the wrapper generates a temporary `config.ncl` with literal
@@ -77,6 +110,9 @@ runtime paths aren't supported. The wrapper bridges that gap.
 When you run `podman-compose up`, podman-compose reads the merged
 `compose.yml` (the conventional name) — no `COMPOSE_FILE` env
 needed at runtime, since the merged file is the only input.
+
+See [WORKFLOW.md](../../WORKFLOW.md) for the full migration story
+from existing `COMPOSE_FILE`-style projects.
 
 ## Try it
 
@@ -97,9 +133,9 @@ podman-compose config       # validates
 or:
 
 ```bash
-# Option B — COMPOSE_FRAGMENTS-driven
-export COMPOSE_FRAGMENTS="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
-../../wrappers/from-compose-file.sh
+# Option B — NICKEL_COMPOSE-driven
+export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+NICKEL_COMPOSE='$COMPOSE_FILE' ../../wrappers/from-nickel-compose.sh
 podman-compose config
 ```
 
@@ -123,11 +159,14 @@ wire the wrapper into your project's `mise.toml`:
 
 ```toml
 [hooks]
-cd = "QUIET=true $MISE_PROJECT_ROOT/wrappers/from-compose-file.sh"
+cd = "QUIET=true $NC_ROOT/wrappers/from-nickel-compose.sh"
 ```
 
+(where `$NC_ROOT` is the path to your nickel-compose install —
+submodule, vendor copy, or `mise x --` invocation).
+
 Now every `cd` into the project regenerates `compose.yml` from
-your current `COMPOSE_FRAGMENTS`.
+your current `NICKEL_COMPOSE`.
 
 ## Migrating your own project
 
@@ -135,28 +174,28 @@ your current `COMPOSE_FRAGMENTS`.
    ```bash
    git submodule add https://github.com/keithy/nickel-compose.git nickel-compose
    ```
-2. Copy `config.ncl` (Option A) into your project. For Option B,
-   reference the wrapper from the nickel-compose install (e.g.
-   `$NC_ROOT/wrappers/from-compose-file.sh`).
-3. Edit the fragment list or COMPOSE_FILE to match your project.
-4. Add the cd hook to your `mise.toml`.
-5. `mise trust && mise install`
-6. `cd` into the project — `compose.yml` appears.
+2. Copy `config.ncl` (Option A) into your project, OR set up
+   `NICKEL_COMPOSE` in your shell / `.env` / mise `[env]` (Option B)
+   and reference `nickel-compose/wrappers/from-nickel-compose.sh`
+   from a cd hook or `mise run render`.
+3. Add the cd hook to your `mise.toml`.
+4. `mise trust && mise install`
+5. `cd` into the project — `compose.yml` appears.
 
-If you already have a fragment list set in `.env` or `.bashrc`,
-rename the env var to `COMPOSE_FRAGMENTS` (or migrate to listing
-fragments in `config.ncl` directly). The wrapper reads it as-is.
+If you already have a fragment list set in `.env` or `.bashrc` as
+`COMPOSE_FILE`, set `NICKEL_COMPOSE='$COMPOSE_FILE'` (Stage 0) and
+the wrapper does the rest. No env var rename needed.
 
 ## Troubleshooting
 
 - **`nickel: command not found` on cd** — run `mise install` once
   on first checkout.
 - **`file not found` from nickel export** — typo in `config.ncl`'s
-  `fragments` list, or `COMPOSE_FRAGMENTS` path that doesn't exist.
+  `fragments` list, or a path in `NICKEL_COMPOSE` that doesn't exist.
   Paths in `config.ncl` are relative to the file; paths in
-  `COMPOSE_FRAGMENTS` are relative to cwd.
-- **`output path ... is also in COMPOSE_FRAGMENTS`** — your fragment
-  list includes a file with the same name as the output (default
+  `NICKEL_COMPOSE` are relative to cwd.
+- **`output path ... is also a fragment`** — your fragment list
+  includes a file with the same name as the output (default
   `compose.yml`). Either rename the source fragment (e.g. to
   `base.yml`) or pass `--out merged-compose.yml` to the wrapper.
 - **`podman-compose config` rejects output** — usually a malformed
@@ -170,5 +209,5 @@ fragments in `config.ncl` directly). The wrapper reads it as-is.
 This dummy project is exercised by the bash-spec test suite at the
 repo root (`tests/dummy_project_spec.sh`). 19 assertions cover
 service union, env concat, port merge, named volumes,
-podman-compose validation, and the three `NICKEL_COMPOSE` wrapper
-variants (Stage 0, Stage 1, mixed literal/env-var refs).
+podman-compose validation, and four `NICKEL_COMPOSE` wrapper variants
+(Stage 0, Stage 1, mixed literal/env-var refs, and literal-only).

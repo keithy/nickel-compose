@@ -117,6 +117,80 @@ last (so they can override earlier definitions if needed).
   `NICKEL_COMPOSE` becomes unused; the `.ncl` is the source of
   truth.
 
+### Try it first — Stage 0 (zero work)
+
+If your project already sets `COMPOSE_FILE` (the conventional
+colon-separated YAML list), you can try nickel-compose in **two
+lines**, no env-var rename:
+
+```bash
+# in your existing setup (shell rc, .env, mise [env], wherever):
+export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+export NICKEL_COMPOSE='$COMPOSE_FILE'
+
+# render via the wrapper:
+$MISE_PROJECT_ROOT/../../wrappers/from-nickel-compose.sh
+```
+
+What happens:
+
+1. The wrapper reads `NICKEL_COMPOSE`, sees `$COMPOSE_FILE`, and
+   indirect-expands it to the literal fragment list.
+2. The wrapper generates a temp `compose.ncl` with literal `import`
+   lines for each fragment.
+3. `nickel export` runs against that temp file, writing `compose.yml`.
+
+Your existing `COMPOSE_FILE` is **untouched**. If you `unset
+NICKEL_COMPOSE`, you're back to whatever your previous workflow was.
+This is a non-destructive preview — see the result, then decide
+whether to migrate further.
+
+### Migration stages (incremental)
+
+Existing projects have one or more of these env vars set:
+
+- `COMPOSE_FILE` — the conventional compose list (colon-separated
+  YAML files). Set by docker, podman, mise, shell rc, `.env`.
+- `COMPOSE_SERVICES` — services definition. Used in some
+  projects as a convention.
+- `COMPOSE_OVERLAYS` — overlay fragments. Used in some projects
+  for dev/test/prod patches.
+
+The migration wrapper accepts any combination of these and
+combines them into one fragment list passed to the merge
+engine. The wrapper itself doesn't render — that's the user's
+job via `nickel export`.
+
+### Wrapper contract
+
+`NICKEL_COMPOSE` is the orchestrator. It accepts a colon-separated
+list of env-var names whose values are themselves colon-separated
+fragment lists:
+
+```
+NICKEL_COMPOSE=$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE
+```
+
+The wrapper reads each named env var, splits on `:`, and
+produces a merged fragment list. Order is preserved: services
+first, then overlays, then any legacy `COMPOSE_FILE` fragments
+last (so they can override earlier definitions if needed).
+
+### Why this shape
+
+- **Each env var keeps its existing role.** A project that uses
+  `COMPOSE_FILE` doesn't have to rename anything to use
+  nickel-compose. It can set `NICKEL_COMPOSE=$COMPOSE_FILE` and
+  nothing else changes.
+- **Migrate incrementally.** Move services into `COMPOSE_SERVICES`
+  one at a time. Then overlays into `COMPOSE_OVERLAYS`. Each
+  step is a no-op for the runtime — same fragments, same output.
+- **The `.ncl` file is the end state.** Once everything's in
+  three env vars, the user can `freeze` the migration by writing
+  a single `compose.ncl` that imports the same fragments.
+  `NICKEL_COMPOSE` becomes unused; the `.ncl` is the source of
+  truth.
+
 ### Migration steps (incremental)
 
 **Stage 0: existing project, `COMPOSE_FILE` only**

@@ -45,7 +45,7 @@ not to mention the availability of write-time validation.
 | Pain | Solution |
 |---|---|
 | No picker | `config.ncl` *is* the picker. Declarative list of fragments. |
-| `COMPOSE_FILE` | `COMPOSE_FRAGMENTS` for the input list (clearly named for its role). `${VAR}` interpolation works the same way compose does — Nickel passes the strings through verbatim. |
+| `COMPOSE_FILE` | `NICKEL_COMPOSE` for the input list (clearly named for its role; accepts literal paths and `$VAR` references). `${VAR}` interpolation works the same way compose does — Nickel passes the strings through verbatim. |
 | No typecheck | Contracts. Missing field → typecheck error with file:line, before any container starts. Per-fragment contracts as needed (`GoclawBase`, `PostgresBase`, etc.). |
 | Not composable | One merge engine in `lib/merge.ncl`. `array_fields` list controls concat-vs-replace. Records recurse. Records union at the top level. All explicit, all in one file, all readable. |
 | Needs `base.yml` | The merge engine auto-fills defaults (`networks`, `restart`, `init`) per service. A root fragment is needed only for top-level `volumes:` declarations — and even that can be folded into a fragment named anything other than the auto-pick output. |
@@ -191,7 +191,7 @@ The LLM that writes compose YAML produces something:
 The merge engine (`lib/merge.ncl`), the typecheck scaffolding,
 and the wrapper are working. The example (dummy-project) shows
 both authoring modes (literal list in `config.ncl`,
-`COMPOSE_FRAGMENTS`-driven wrapper). The dual-direction bet is
+`NICKEL_COMPOSE`-driven wrapper). The dual-direction bet is
 proven.
 
 What's not yet there:
