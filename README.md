@@ -1,30 +1,28 @@
 # nickel-compose
 
-Nickel-driven compose: import YAML fragments, merge with Compose
-semantics, export a single `compose.yaml`.
+Nickel-driven compose: import existing YAML fragments, merge with Compose
+semantics, level up to nickel config, export a single `compose.yaml`.
 
 ## Why
 
-Podman/Docker compose ships as YAML. Multi-fragment setups (root +
+Podman/Docker compose uses as YAML. Multi-fragment setups (root +
 services + overlays) usually combine fragments via a picker script
 or a colon-separated env var, but the merge semantics live in shell
 scripts and YAML quirks (`!reset`, anchor merge, `${VAR:?}`). This
 project:
 
-- replaces the picker with a single `config.ncl`
-- merges fragments in Nickel with the same semantics Compose uses
+- replaces a picker with a single proper configuration `config.ncl`
+- merges fragments in Nickel or Yaml with the same semantics Compose uses
 - auto-fills defaults (networks, restart, init) so fragments stay small
-- synthesizes top-level `volumes:` and `networks:` from service references, so a root fragment is optional
-- supports conditional patches (`if_present`, `if_absent`) so a fragment can adapt to what else is selected
+- synthesizes top-level `volumes:` and `networks:` from service references, so that a root fragment is not needed
+- supports conditional patches (`if_present`, `if_absent`) so a service fragment can adapt to the other services available
 - exports one `compose.yaml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
-`NICKEL_COMPOSE` (the input list) is intentionally distinct from
+`NICKEL_COMPOSE` (optional input list) is intentionally distinct from
 `COMPOSE_FILE` (which compose tools reserve for the merged output).
 Nickel-compose follows the convention `.yml` for input fragments
-and `.yaml` for the rendered whole — never name a source fragment
-`compose.yaml`, since that's reserved for the merged output that
-both `podman-compose` and `docker compose` auto-pick.
+and `.yaml` for the rendered whole.
 
 ## Install
 
@@ -41,7 +39,7 @@ With mise tasks (recommended):
 
 ```bash
 mise run check                       # typecheck the merge engine
-mise run test                        # run the bash-spec test suite
+mise run test                        # run all of the bash-spec test suites
 mise run render                      # render examples/podclaws/config.ncl
 mise run render -- config=path out=path   # render a custom config
 ```
@@ -51,35 +49,20 @@ Or directly:
 ```bash
 ./nickel-render.sh --config examples/podclaws/config.ncl --out compose.yaml
 nickel export --format yaml examples/podclaws/config.ncl > compose.yaml
-./tests/merge_spec.sh                 # bash-spec test runner
 ```
 
-The test suite uses [bash-spec 2.1](https://github.com/keithy/) (vendored
-under `tests/lib/`). Run `./tests/merge_spec.sh` to see the
-`describe` / `context` / `it` / `should_succeed` style output.
-
-### Golden-file testing
-
-Rendered outputs go to `tests/out/` (gitignored). Snapshots of the
-correct output live in `tests/expected/` (committed). Each test
-asserts that the rendered file matches its expected snapshot.
-
-To regenerate snapshots after intentional changes:
-
-```bash
-INIT=true mise run test
-git add tests/expected/
-```
-
-In normal runs (no `INIT`), tests fail if `tests/out/` and
-`tests/expected/` differ.
+See [docs/testing.md](docs/testing.md) for the spec/test suite and how
+to add tests.
 
 ## How it works
 
 ```
+Optional Migration path: rename COMPOSE_FILE to NICKEL_COMPOSE
+NICKEL_COMPOSE --[from-nickel-compose.sh]--> config.ncl
+
 config.ncl  --[nickel export]-->  compose.yaml  --[podman compose]-->  containers
    |
-   +-- imports YAML fragments
+   +-- imports YML/NCL fragments
    +-- applies defaults per service
    +-- merges fragments with Compose semantics
 ```
@@ -249,11 +232,16 @@ nickel-compose/
 │   └── podclaws/              # example using real podclaws fragments
 ├── tests/
 │   ├── merge.ncl              # synthetic merge fixture
-│   ├── merge_spec.sh          # bash-spec 2.1 test runner
+│   ├── *_spec.sh              # one bash-spec file per context
 │   ├── lib/
 │   │   └── bash-spec.sh       # vendored bash-spec 2.1
 │   ├── out/                   # rendered outputs (gitignored)
-│   └── expected/              # golden snapshots (committed)
+│   ├── expected/              # golden snapshots (committed)
+│   └── fixtures/              # synthetic fragments for engine tests
+├── docs/
+│   ├── design.md              # design rationale
+│   ├── workflow.md            # central workflow + migration paths
+│   └── testing.md             # test suite, golden-file testing
 ├── mise/
 │   ├── config.toml            # tools (nickel, jq) + task config
 │   └── tasks/
