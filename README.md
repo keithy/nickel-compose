@@ -1,7 +1,12 @@
 # nickel-compose
 
+Docker Compose is NOT composable. Nickel-Compose fixes that.
+
+Docker Compose uses YAML, there is nothing good to be said about that.
+Nickel Compose provides a migration path to a real  configuration language.
+
 Nickel-driven compose: import existing YAML fragments, merge with Compose
-semantics, level up to nickel config, export a single `compose.yaml`.
+semantics, level up to real nickel config, export a single `compose.yaml`.
 
 ## Why
 
