@@ -144,6 +144,13 @@ under them is a gate in the form `"<field>::<value>"` (double
 colon so gate values can contain dots). The value is a patch
 record that gets merged at the top level when the gate is met.
 
+Both sides of `::` accept regex patterns, not just literal names.
+`*` matches any chars, `?` matches one char, and regex
+metachars in literal names (like the dot in `my.app`) are
+escaped automatically. So `services::redis-.*` matches
+`redis`, `redis-cache`, `redis-sentinel`, etc. The most common
+case — `services::redis` — works without any wildcards.
+
 ```yaml
 # dev.yml — patches web only when redis is selected
 if_present:

@@ -189,6 +189,31 @@ let parse_gate_key = fun key =>
     }
 in
 
+# Test a string against an anchored regex pattern. Gates accept
+# regex patterns on both sides of "::" (the field name and the
+# value name). Patterns are matched against field names in the
+# merged record's top-level sections. This lets you write
+# "services::redis-*" to match redis, redis-cache, redis-sentinel,
+# etc., or "*::postgres" to match a postgres service, volume, or
+# network. The most common cases — exact names like
+# "services::redis" — work without any wildcards.
+#
+# std.string.is_match is unanchored, so we wrap the pattern with
+# ^...$ for whole-string matching. The user writes a regex
+# pattern; we anchor it.
+let regex_match = fun pattern s =>
+  std.string.is_match ("^" ++ pattern ++ "$") s
+in
+
+# Check whether a record has any field whose name matches a given
+# regex pattern. Returns true if the record has at least one
+# matching field. Used by resolve_gates to test if a pattern
+# (e.g. "redis-*") matches any service, volume, or network in
+# the merged set.
+let record_has_match = fun pattern record =>
+  std.array.any (fun field => regex_match pattern field) (std.record.fields record)
+in
+
 # Resolve conditional patches against the merged record. Each
 # top-level entry under if_present or if_absent is a gate:
 # "<field>::<value>". The value of the entry is a patch to apply
@@ -211,6 +236,15 @@ in
 # The `services:` key in the patch lands at merged.services, so
 # web.environment gains REDIS_HOST=redis and web.depends_on gains
 # redis.
+#
+# Both sides of the "::" delimiter accept regex patterns (not just
+# literal names). So `services::redis-.*` matches redis, redis-cache,
+# redis-sentinel — any service whose name starts with "redis-".
+# And `*::postgres` matches a postgres service, volume, or network,
+# in any section. Dots and other regex metachars in literal names
+# are escaped automatically; you can use `*` (any chars) and `?`
+# (one char) without learning regex syntax. The most common case —
+# `services::redis` — works without any wildcards.
 #
 #   if_absent:
 #     services::postgres:
@@ -241,7 +275,7 @@ let resolve_gates = fun merged conditionals should_apply =>
       if parsed == null then acc
       else
         let section = get_or acc parsed.gate_field {} in
-        let gate_met = std.record.has_field parsed.gate_value section in
+        let gate_met = record_has_match parsed.gate_value section in
         if should_apply gate_met then
           merge_records acc conditionals."%{key}"
         else acc)

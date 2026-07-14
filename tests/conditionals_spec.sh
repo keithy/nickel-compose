@@ -68,6 +68,65 @@ EOF
   }
 }
 
+describe "if_present wildcard gates" && {
+  FIXTURE_WC_MATCH="$ROOT/tests/fixtures/conditionals/wildcard-redis.ncl"
+  FIXTURE_WC_NOMATCH="$ROOT/tests/fixtures/conditionals/wildcard-no-match.ncl"
+
+  it "applies the patch when a wildcard pattern matches a service name" && {
+    # The gate is "services::redis-.*" which matches "redis-cache"
+    # and "redis-sentinel". Since at least one matches, the patch
+    # fires and web gains REDIS_HOST.
+    cat > "out/wildcard-match.ncl" <<EOF
+$BUILD
+build [ import "$FIXTURE_WC_MATCH" ]
+EOF
+    run nickel export --format json "out/wildcard-match.ncl" > "out/wildcard-match.json"
+    should_succeed
+    expect_jq "out/wildcard-match.json" '.services.web.environment[]' to_match 'REDIS_HOST'
+    expect_jq "out/wildcard-match.json" '.services.web.depends_on[0]' to_be "redis-cache"
+  }
+
+  it "skips the patch when no field name matches the wildcard" && {
+    # The gate is "services::memcached-.*" but only redis-cache
+    # exists. No match, patch is skipped.
+    cat > "out/wildcard-nomatch.ncl" <<EOF
+$BUILD
+build [ import "$FIXTURE_WC_NOMATCH" ]
+EOF
+    run nickel export --format json "out/wildcard-nomatch.ncl" > "out/wildcard-nomatch.json"
+    should_succeed
+    expect_jq "out/wildcard-nomatch.json" '.services.web | has("environment")' to_be "false"
+  }
+
+  it "treats exact names without wildcards as literal regex (dot is literal)" && {
+    # A gate value with a dot (e.g. "my.app") should match a
+    # service literally named "my.app", not "myxapp". This is
+    # the key reason we don't just use shell glob — we anchor
+    # and escape properly.
+    cat > "out/dot-literal.ncl" <<EOF
+$BUILD
+build [
+  {
+    services = {
+      web = { image = "nginx:1.27" },
+      "my.app" = { image = "x" },
+    },
+    if_present = {
+      "services::my\\\\.app" = {
+        services = {
+          web = { environment = ["APP=my.app"] },
+        },
+      },
+    },
+  }
+]
+EOF
+    run nickel export --format json "out/dot-literal.ncl" > "out/dot-literal.json"
+    should_succeed
+    expect_jq "out/dot-literal.json" '.services.web.environment[]' to_match 'APP=my.app'
+  }
+}
+
 describe "if_absent conditionals" && {
   FIXTURE_WITH_PG="$ROOT/tests/fixtures/conditionals/with-postgres.ncl"
   FIXTURE_WITHOUT_PG="$ROOT/tests/fixtures/conditionals/without-postgres.ncl"
