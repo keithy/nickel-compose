@@ -14,6 +14,8 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
+FROM_WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
+TO_WRAPPER="$ROOT/scripts/to-compose.sh"
 
 rm -rf out
 mkdir -p out
@@ -134,220 +136,214 @@ EOF
     fi
   }
 
-  it "NICKEL_COMPOSE literal-only (no \$VAR refs) produces equivalent output" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      # Literal-path form: NICKEL_COMPOSE='a:b:c' is the same input
-      # shape as the deleted COMPOSE_FRAGMENTS wrapper.
-      WRAPPER_OUT="$(pwd)/out/wrapper-output.yml"
+  it "two-step flow: NICKEL_COMPOSE literal-only produces equivalent output" && {
+    # Run the from- wrapper (produces config.ncl) then the to-
+    # wrapper (renders compose.ncl + compose.yaml). The result
+    # should match the golden snapshot produced by direct
+    # `nickel export config.ncl`.
+    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
       (
         cd "$ROOT/examples/dummy-project"
         NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-          "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
 
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
-        echo "literal-path wrapper output differs"
+      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
+        --out "out/wrapper-literal.yaml" >/dev/null
+      should_succeed
+
+      if ! diff -q "out/wrapper-literal.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "out/wrapper-literal.yaml" "out/dummy/compose.yaml" | head -20
+        echo "literal-path two-step output differs from golden"
         false
       fi
       should_succeed
 
-      rm -f "$WRAPPER_OUT"
+      rm -f "out/wrapper-literal.yaml" "out/wrapper-literal.ncl" \
+            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else
       echo "(skipped — wrapper not executable)"
       true
     fi
   }
 
-  it "wrapper writes compose.ncl (canonical) alongside compose.yaml" && {
-    # The wrapper produces two artifacts: compose.ncl (canonical
-    # Nickel record, the merge result) and compose.yaml (derived
-    # YAML, for tools that don't speak Nickel). The .ncl is the
-    # source of truth; the .yaml is a one-way projection.
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      NCL_OUT="$(pwd)/out/wrapper-canonical.ncl"
-      YAML_OUT="$(pwd)/out/wrapper-canonical.yaml"
+  it "two-step flow: compose.ncl is canonical and importable" && {
+    # The .ncl is the source of truth: it must be a valid Nickel
+    # file that, when imported, exposes the merged record. The
+    # .yaml is a one-way projection of the same record.
+    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
       (
         cd "$ROOT/examples/dummy-project"
         NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-          "$WRAPPER" --out "$YAML_OUT" >/dev/null 2>&1
-        # compose.ncl is written at the cwd (project root) — in
-        # the test subshell that's the dummy-project dir, but the
-        # file persists after exit.
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
+      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
+        --out "out/twostep.yaml" >/dev/null
+      should_succeed
 
-      # The wrapper wrote compose.ncl in cwd (dummy-project dir).
-      NCL_AT="$ROOT/examples/dummy-project/compose.ncl"
+      NCL_AT="out/twostep.ncl"
       expect "$NCL_AT" to_exist
-      expect "$YAML_OUT" to_exist
+      expect "out/twostep.yaml" to_exist
 
-      # compose.ncl must be a valid Nickel file that, when
-      # imported, exposes the merged record. Specifically, the
-      # services field is non-empty.
-      cat > "out/check-compose.ncl" <<EOF
-let merged = import "$NCL_AT" in
+      cat > "out/check-ncl.ncl" <<EOF
+let merged = import "$(pwd)/$NCL_AT" in
 {
   ncl_service_count = std.array.length (std.record.fields merged.services),
   ncl_has_networks = std.record.has_field "networks" merged,
   ncl_has_volumes = std.record.has_field "volumes" merged,
 }
 EOF
-      run nickel export --format json "out/check-compose.ncl" > "out/check-compose.json"
+      run nickel export --format json "out/check-ncl.ncl" > "out/check-ncl.json"
       should_succeed
-      expect_jq "out/check-compose.json" ".ncl_service_count" to_be "3"
-      expect_jq "out/check-compose.json" ".ncl_has_networks" to_be "true"
-      expect_jq "out/check-compose.json" ".ncl_has_volumes" to_be "true"
+      expect_jq "out/check-ncl.json" ".ncl_service_count" to_be "3"
+      expect_jq "out/check-ncl.json" ".ncl_has_networks" to_be "true"
+      expect_jq "out/check-ncl.json" ".ncl_has_volumes" to_be "true"
 
-      # Deriving compose.yaml from compose.ncl must match the
-      # wrapper's compose.yaml output (round-trip).
+      # Round-trip: deriving .yaml from .ncl must match the
+      # two-step's .yaml output.
       run nickel export --format yaml "$NCL_AT" \
-        | sed -n '2,$p' > "out/wrapper-derived.yaml"
-      if ! diff -q "out/wrapper-derived.yaml" "$YAML_OUT" >/dev/null 2>&1; then
-        diff "out/wrapper-derived.yaml" "$YAML_OUT" | head -20
-        echo "derived yaml does not match wrapper output"
+        | sed -n '2,$p' > "out/twostep-derived.yaml"
+      if ! diff -q "out/twostep-derived.yaml" "out/twostep.yaml" >/dev/null 2>&1; then
+        diff "out/twostep-derived.yaml" "out/twostep.yaml" | head -20
+        echo "derived yaml does not match two-step output"
         false
       fi
       should_succeed
 
-      rm -f "$NCL_AT" "$NCL_OUT" "$YAML_OUT" "out/wrapper-derived.yaml" "out/check-compose.ncl" "out/check-compose.json"
+      rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
+            "out/check-ncl.ncl" "out/check-ncl.json" \
+            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else
       echo "(skipped — wrapper not executable)"
       true
     fi
   }
 
-  it "NICKEL_COMPOSE-driven wrapper (Stage 0): single env var" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      WRAPPER_OUT="$(pwd)/out/wrapper-stage0.yml"
+  it "two-step flow (Stage 0): NICKEL_COMPOSE='\$COMPOSE_FILE'" && {
+    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
       (
         cd "$ROOT/examples/dummy-project"
         COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
           NICKEL_COMPOSE='$COMPOSE_FILE' \
-          "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
-
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
-        echo "stage 0 wrapper output differs"
+      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
+        --out "out/stage0.yaml" >/dev/null
+      should_succeed
+      if ! diff -q "out/stage0.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "out/stage0.yaml" "out/dummy/compose.yaml" | head -20
+        echo "stage 0 output differs from golden"
         false
       fi
       should_succeed
-
-      rm -f "$WRAPPER_OUT"
+      rm -f "out/stage0.yaml" "out/stage0.ncl" \
+            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else
       echo "(skipped)"
       true
     fi
   }
 
-  it "NICKEL_COMPOSE-driven wrapper (Stage 1): split env vars" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      WRAPPER_OUT="$(pwd)/out/wrapper-stage1.yml"
+  it "two-step flow (Stage 1): split env vars" && {
+    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
       (
         cd "$ROOT/examples/dummy-project"
         COMPOSE_SERVICES="services/web.yml:services/db.yml" \
           COMPOSE_OVERLAYS="overlays/dev.yml" \
           COMPOSE_FILE="base.yml" \
           NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
-          "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
-
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
-        echo "stage 1 wrapper output differs"
+      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
+        --out "out/stage1.yaml" >/dev/null
+      should_succeed
+      if ! diff -q "out/stage1.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "out/stage1.yaml" "out/dummy/compose.yaml" | head -20
+        echo "stage 1 output differs from golden"
         false
       fi
       should_succeed
-
-      rm -f "$WRAPPER_OUT"
+      rm -f "out/stage1.yaml" "out/stage1.ncl" \
+            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else
       echo "(skipped)"
       true
     fi
   }
 
-  it "NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      WRAPPER_OUT="$(pwd)/out/wrapper-mixed.yml"
+  it "two-step flow: NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
+    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
       (
         cd "$ROOT/examples/dummy-project"
-        # Mix of literal paths and an env-var reference.
         NICKEL_COMPOSE='base.yml:services/web.yml:$REMAINING' \
           REMAINING="services/db.yml:overlays/dev.yml" \
-          "$WRAPPER" --out "$WRAPPER_OUT" >/dev/null
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
-
-      if ! diff -q "$WRAPPER_OUT" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "$WRAPPER_OUT" "out/dummy/compose.yaml" | head -20
-        echo "mixed form wrapper output differs"
+      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
+        --out "out/mixed.yaml" >/dev/null
+      should_succeed
+      if ! diff -q "out/mixed.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
+        diff "out/mixed.yaml" "out/dummy/compose.yaml" | head -20
+        echo "mixed form output differs from golden"
         false
       fi
       should_succeed
-
-      rm -f "$WRAPPER_OUT"
+      rm -f "out/mixed.yaml" "out/mixed.ncl" \
+            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else
       echo "(skipped)"
       true
     fi
   }
 
-  it "wrapper errors when NICKEL_COMPOSE is unset" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
+  it "from-nickel-compose errors when NICKEL_COMPOSE is unset" && {
+    if [[ -x "$FROM_WRAPPER" ]]; then
       ERR_LOG="$(pwd)/out/wrapper-unset.stderr"
       (
         unset NICKEL_COMPOSE
         cd "$ROOT/examples/dummy-project"
-        "$WRAPPER" --out /tmp/should-not-be-written.yml >/dev/null 2>"$ERR_LOG"
+        "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null 2>"$ERR_LOG"
       )
       should_fail
       grep -q "NICKEL_COMPOSE not set" "$ERR_LOG"
       should_succeed
-      rm -f "$ERR_LOG" /tmp/should-not-be-written.yml
+      rm -f "$ERR_LOG"
     else
       echo "(skipped)"
       true
     fi
   }
 
-  it "wrapper errors when \$VAR reference expands empty" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
-      ERR_LOG="$(pwd)/out/wrapper-empty-var.stderr"
+  it "from-nickel-compose errors when \$VAR reference expands empty" && {
+    if [[ -x "$FROM_WRAPPER" ]]; then
+      ERR_LOG="$(pwd)/out/wrapper-empty.stderr"
       (
-        unset MISSING_VAR
         cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE='$MISSING_VAR' \
-          "$WRAPPER" --out /tmp/should-not-be-written.yml >/dev/null 2>"$ERR_LOG"
+        NICKEL_COMPOSE='$UNSET_VAR' \
+          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null 2>"$ERR_LOG"
       )
       should_fail
-      grep -q "expanded to an empty fragment list" "$ERR_LOG"
+      grep -q "empty fragment list" "$ERR_LOG"
       should_succeed
-      rm -f "$ERR_LOG" /tmp/should-not-be-written.yml
+      rm -f "$ERR_LOG"
     else
       echo "(skipped)"
       true
     fi
   }
 
-  it "wrapper errors when --out collides with a fragment" && {
-    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
-    if [[ -x "$WRAPPER" ]]; then
+  it "from-nickel-compose errors when --out collides with a fragment" && {
+    if [[ -x "$FROM_WRAPPER" ]]; then
       ERR_LOG="$(pwd)/out/wrapper-collision.stderr"
       (
         cd "$ROOT/examples/dummy-project"
         NICKEL_COMPOSE="base.yml:services/web.yml" \
-          "$WRAPPER" --out base.yml >/dev/null 2>"$ERR_LOG"
+          "$FROM_WRAPPER" --out base.yml >/dev/null 2>"$ERR_LOG"
       )
       should_fail
       grep -q "would clobber source" "$ERR_LOG"
