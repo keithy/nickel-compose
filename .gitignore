@@ -1,5 +1,10 @@
 # Test outputs (regenerated each test run)
 tests/out/
 
-# Build artifacts at the project root only (anchored)
+# Build artifacts at the project root only (anchored).
+# compose.ncl is the merged record (canonical). compose.yaml is
+# the rendered legacy format. compose.yml is a tracked fragment
+# in some projects (not in this repo).
+/compose.ncl
+/compose.yaml
 /compose.yml

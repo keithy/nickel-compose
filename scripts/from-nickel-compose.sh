@@ -168,6 +168,31 @@ trap 'rm -f "$TMP"' EXIT
 
 generate_config "$fragments" > "$TMP"
 
-$NICKEL export --format yaml "$TMP" | sed -n '2,$p' > "$OUT"
+# Two-stage render:
+#   1. Write compose.ncl (canonical, Nickel-native) by evaluating
+#      the merge program. The result is a valid Nickel record that
+#      can be re-imported by query tools (composer.report.*,
+#      composer.validation.*) and by future Nickel-native runtimes.
+#   2. Derive compose.yaml (legacy format) from compose.ncl for
+#      tools that don't speak Nickel (most current container
+#      runtimes). YAML is a one-way projection; the canonical
+#      artifact is compose.ncl.
+COMPOSE_NCL="compose.ncl"
+[[ "$COMPOSE_NCL" != /* ]] && COMPOSE_NCL="$CWD/$COMPOSE_NCL"
 
-echo "rendered: $OUT (from NICKEL_COMPOSE: $nickel_compose)"
+# Collision check: refuse to clobber a fragment that's also the
+# canonical output.
+for path in "${fragment_paths[@]}"; do
+  resolved="$path"
+  [[ "$resolved" != /* ]] && resolved="$CWD/$resolved"
+  if [[ "$resolved" == "$COMPOSE_NCL" ]]; then
+    echo "canonical output '$COMPOSE_NCL' is also a fragment — would clobber source" >&2
+    exit 1
+  fi
+done
+
+$NICKEL eval "$TMP" > "$COMPOSE_NCL"
+$NICKEL export --format yaml "$COMPOSE_NCL" | sed -n '2,$p' > "$OUT"
+
+echo "wrote: $COMPOSE_NCL (canonical)"
+echo "wrote: $OUT (derived from $COMPOSE_NCL)"

@@ -161,6 +161,65 @@ EOF
     fi
   }
 
+  it "wrapper writes compose.ncl (canonical) alongside compose.yaml" && {
+    # The wrapper produces two artifacts: compose.ncl (canonical
+    # Nickel record, the merge result) and compose.yaml (derived
+    # YAML, for tools that don't speak Nickel). The .ncl is the
+    # source of truth; the .yaml is a one-way projection.
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
+    if [[ -x "$WRAPPER" ]]; then
+      NCL_OUT="$(pwd)/out/wrapper-canonical.ncl"
+      YAML_OUT="$(pwd)/out/wrapper-canonical.yaml"
+      (
+        cd "$ROOT/examples/dummy-project"
+        NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
+          "$WRAPPER" --out "$YAML_OUT" >/dev/null 2>&1
+        # compose.ncl is written at the cwd (project root) — in
+        # the test subshell that's the dummy-project dir, but the
+        # file persists after exit.
+      )
+      should_succeed
+
+      # The wrapper wrote compose.ncl in cwd (dummy-project dir).
+      NCL_AT="$ROOT/examples/dummy-project/compose.ncl"
+      expect "$NCL_AT" to_exist
+      expect "$YAML_OUT" to_exist
+
+      # compose.ncl must be a valid Nickel file that, when
+      # imported, exposes the merged record. Specifically, the
+      # services field is non-empty.
+      cat > "out/check-compose.ncl" <<EOF
+let merged = import "$NCL_AT" in
+{
+  ncl_service_count = std.array.length (std.record.fields merged.services),
+  ncl_has_networks = std.record.has_field "networks" merged,
+  ncl_has_volumes = std.record.has_field "volumes" merged,
+}
+EOF
+      run nickel export --format json "out/check-compose.ncl" > "out/check-compose.json"
+      should_succeed
+      expect_jq "out/check-compose.json" ".ncl_service_count" to_be "3"
+      expect_jq "out/check-compose.json" ".ncl_has_networks" to_be "true"
+      expect_jq "out/check-compose.json" ".ncl_has_volumes" to_be "true"
+
+      # Deriving compose.yaml from compose.ncl must match the
+      # wrapper's compose.yaml output (round-trip).
+      run nickel export --format yaml "$NCL_AT" \
+        | sed -n '2,$p' > "out/wrapper-derived.yaml"
+      if ! diff -q "out/wrapper-derived.yaml" "$YAML_OUT" >/dev/null 2>&1; then
+        diff "out/wrapper-derived.yaml" "$YAML_OUT" | head -20
+        echo "derived yaml does not match wrapper output"
+        false
+      fi
+      should_succeed
+
+      rm -f "$NCL_AT" "$NCL_OUT" "$YAML_OUT" "out/wrapper-derived.yaml" "out/check-compose.ncl" "out/check-compose.json"
+    else
+      echo "(skipped — wrapper not executable)"
+      true
+    fi
+  }
+
   it "NICKEL_COMPOSE-driven wrapper (Stage 0): single env var" && {
     WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
