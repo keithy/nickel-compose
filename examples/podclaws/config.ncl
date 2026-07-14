@@ -11,7 +11,7 @@
 #
 # Tested with nickel 1.17.0 + podman-compose 1.6.0.
 
-let build = import "../../lib/merge.ncl" in
+let nc = import "../lib/nickel-compose.ncl" in
 
 # Fragments — selection happens here. Comment out a line to skip.
 # Order matters: later fragments override scalars and concat arrays.
@@ -23,4 +23,4 @@ let fragments = [
   import "/code/podclaws/podman/+network-fix.yml",
 ] in
 
-build fragments
+nc.merge fragments

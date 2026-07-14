@@ -16,7 +16,7 @@ Automating the declaration of `volumes:` and `networks:` by parsing service defi
 
 This is a massive upgrade over Compose overlays. Standard Compose handles overrides via blunt positional merging (`later wins`), which means a development overlay has to intimately understand the exact structure of the base file. Your conditional evaluation blocks allow fragments to say, *"If this project includes Redis, apply this tuning patch; if it doesn't, inject this fallback."* That turns fragments into true, independent plugins.
 
-### The Explicit Merge Engine (`lib/merge.ncl`)
+### The Explicit Merge Engine (`lib/nickel-compose.ncl`)
 
 Controlling array behavior via an explicit `array_fields` list (choosing whether to concatenate or replace) is a huge relief. In YAML, you are entirely at the mercy of whatever parser implementation the tool is using (e.g., whether it merges list items or overwrites the array entirely). Moving that logic into a visible, readable Nickel file brings structural predictability.
 

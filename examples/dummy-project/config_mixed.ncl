@@ -9,7 +9,7 @@
 # Leave the rarely-edited ones (base, dev) on YAML until you
 # need to touch them.
 
-let build = import "../../lib/merge.ncl" in
+let nc = import "../../lib/nickel-compose.ncl" in
 
 let fragments = [
   import "./base.yml",
@@ -18,4 +18,4 @@ let fragments = [
   import "./overlays/dev.yml",
 ] in
 
-build fragments
+nc.merge fragments

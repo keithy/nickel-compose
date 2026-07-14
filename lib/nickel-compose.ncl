@@ -1,13 +1,19 @@
-# nickel-compose/lib/merge.ncl
+# nickel-compose/lib/nickel-compose.ncl
 #
 # Generic merge engine for podman/docker compose fragments.
 #
-# This file evaluates to a single function `build` that takes a list
-# of YAML/NCL fragments and returns a merged Compose record.
+# This file evaluates to a record with at least one function:
+#   - merge: takes a list of YAML/NCL fragments, returns the merged
+#     Compose record (services, networks, volumes, with conditional
+#     patches applied and top-level declarations synthesized).
 #
 # Usage:
-#   let build = import "./lib/merge.ncl" in
-#   build [frag1, frag2, ...]
+#   let nc = import "./lib/nickel-compose.ncl" in
+#   nc.merge [frag1, frag2, ...]
+#
+# The import is bound to a record so future helpers (validate,
+# discover, etc.) can be added without breaking callers — just
+# add a new field to this record.
 #
 # Compose semantics reproduced:
 #   - services/volumes/networks: union of keys (later wins on collision)
@@ -17,6 +23,8 @@
 #     if not declared by any fragment (compose users don't have to
 #     maintain a separate base fragment just to declare volumes their
 #     services reference)
+#   - if_present / if_absent: conditional patches that adapt to the
+#     other fragments selected. Gate keys accept regex patterns.
 #
 # Tested with nickel 1.17.0.
 
@@ -299,11 +307,16 @@ let resolve_conditionals = fun merged =>
   std.record.remove "if_present" (std.record.remove "if_absent" after_present)
 in
 
-# Public entry point: takes a list of fragments, returns merged Compose.
-# Imports this file with `let build = import "./lib/merge.ncl" in`
-# then call `build fragments`.
-fun fragments =>
-  let prepped = std.array.map with_defaults fragments in
-  let merged = merge_all prepped in
-  let resolved = resolve_conditionals merged in
-  synthesize resolved
+# Public entry point. The record form lets us add helpers (validate,
+# discover, etc.) without breaking callers. Imports this file with
+# `let nc = import "./lib/nickel-compose.ncl" in` then call
+# `nc.merge fragments`.
+{
+  merge = fun fragments =>
+    let prepped = std.array.map with_defaults fragments in
+    let merged = merge_all prepped in
+    let resolved = resolve_conditionals merged in
+    synthesize resolved,
+
+  version = "0.1.0",
+}

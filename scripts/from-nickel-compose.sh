@@ -139,7 +139,7 @@ done
 # Generate a temp config.ncl with literal imports for each fragment.
 generate_config() {
   local frags="$1"
-  echo "let build = import \"$NC_ROOT/lib/merge.ncl\" in"
+  echo "let nc = import \"$NC_ROOT/lib/nickel-compose.ncl\" in"
   echo ""
   echo "let fragments = ["
   IFS=':' read -ra paths <<< "$frags"
@@ -154,7 +154,7 @@ generate_config() {
   done
   echo "] in"
   echo ""
-  echo "build fragments"
+  echo "nc.merge fragments"
 }
 
 if command -v mise >/dev/null 2>&1; then

@@ -3,7 +3,7 @@
 # Entry point for the podclaws-patterns fixture. Imports the
 # three fixtures above in order. No dependency on /code/podclaws/.
 
-let build = import "../../../lib/merge.ncl" in
+let nc = import "../../../lib/nickel-compose.ncl" in
 
 let fragments = [
   import "./01-base.yml",
@@ -11,4 +11,4 @@ let fragments = [
   import "./03-overlay.yml",
 ] in
 
-build fragments
+nc.merge fragments

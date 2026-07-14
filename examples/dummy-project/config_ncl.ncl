@@ -6,7 +6,7 @@
 #
 # Use this config when you've finished migrating fragments off YAML.
 
-let build = import "../../lib/merge.ncl" in
+let nc = import "../../lib/nickel-compose.ncl" in
 
 let fragments = [
   import "./base.ncl",
@@ -15,4 +15,4 @@ let fragments = [
   import "./overlays/dev.ncl",
 ] in
 
-build fragments
+nc.merge fragments

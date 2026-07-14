@@ -88,18 +88,18 @@ if [[ -z "$OUT_DIR" ]]; then
 fi
 
 # Locate the nickel-compose merge engine. Search order:
-#   1. $ROOT/nickel-compose/lib/merge.ncl  (submodule layout)
-#   2. $ROOT/lib/merge.ncl                 (vendored layout)
-#   3. $SCRIPT_DIR/../lib/merge.ncl        (alongside the script,
+#   1. $ROOT/nickel-compose/lib/nickel-compose.ncl  (submodule layout)
+#   2. $ROOT/lib/nickel-compose.ncl                 (vendored layout)
+#   3. $SCRIPT_DIR/../lib/nickel-compose.ncl        (alongside the script,
 #                                          when scanning a nickel-
 #                                          compose checkout itself)
 # Compute the import path from OUT_DIR so it's correct wherever
 # the output lands.
 MERGE_LIB=""
 for candidate in \
-    "$ROOT/nickel-compose/lib/merge.ncl" \
-    "$ROOT/lib/merge.ncl" \
-    "$NC_ROOT/lib/merge.ncl"; do
+    "$ROOT/nickel-compose/lib/nickel-compose.ncl" \
+    "$ROOT/lib/nickel-compose.ncl" \
+    "$NC_ROOT/lib/nickel-compose.ncl"; do
   if [[ -f "$candidate" ]]; then
     MERGE_LIB="$(realpath --relative-to="$OUT_DIR" "$candidate" 2>/dev/null || echo "$candidate")"
     if [[ "$MERGE_LIB" == /* ]]; then
@@ -113,9 +113,9 @@ if [[ -z "$MERGE_LIB" ]]; then
   # Last resort: assume a submodule at the project root and emit a
   # best-guess import path. The user can edit before rendering.
   if [[ "$OUT_DIR" == "$ROOT" ]]; then
-    MERGE_LIB="nickel-compose/lib/merge.ncl"
+    MERGE_LIB="nickel-compose/lib/nickel-compose.ncl"
   else
-    MERGE_LIB="../nickel-compose/lib/merge.ncl"
+    MERGE_LIB="../nickel-compose/lib/nickel-compose.ncl"
   fi
 fi
 
@@ -198,7 +198,7 @@ trap 'rm -f "$TMP"' EXIT
   echo "# imports you want to include. Order matters: later wins"
   echo "# on key collision."
   echo ""
-  echo "let build = import \"$MERGE_LIB\" in"
+  echo "let nc = import \"$MERGE_LIB\" in"
   echo ""
   echo "let fragments = ["
 
@@ -221,7 +221,7 @@ trap 'rm -f "$TMP"' EXIT
   done
   echo "] in"
   echo ""
-  echo "build fragments"
+  echo "nc.merge fragments"
 } > "$TMP"
 
 if [[ -n "$OUT" ]]; then

@@ -62,10 +62,10 @@ describe "merge engine" && {
   context "overlay behavior" && {
     it "overlay networks wins over default [default]" && {
       cat > "out/.override.ncl" <<EOF
-let build = import "$ROOT/lib/merge.ncl" in
+let nc = import "$ROOT/lib/nickel-compose.ncl" in
 let base = { services = { web = { image = "x" } } } in
 let overlay = { services = { web = { networks = ["other"] } } } in
-build [base, overlay]
+nc.merge [base, overlay]
 EOF
       run nickel export --format json "out/.override.ncl" > "out/.override.json"
       expect_jq "out/.override.json" '.services.web.networks[0]' to_be "other"
