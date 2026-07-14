@@ -3,7 +3,7 @@
 A self-contained example showing how to add nickel-compose to an
 existing podman/docker-compose project. Compose fragments live here;
 the wrapper that drives the merge from `$NICKEL_COMPOSE` lives at
-the nickel-compose repo root (`../../wrappers/`).
+the nickel-compose repo root (`../../scripts/`).
 
 ## What's here
 
@@ -28,7 +28,7 @@ dummy-project/
 ```
 
 The wrapper `from-nickel-compose.sh` lives at the nickel-compose
-repo root (`../../wrappers/`). The mise cd hook in this directory
+repo root (`../../scripts/`). The mise cd hook in this directory
 points there.
 
 The root fragment is named `base.yml`, not `compose.yaml`, because
@@ -52,7 +52,7 @@ export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
 export NICKEL_COMPOSE='$COMPOSE_FILE'
 
 # render via the wrapper:
-../../wrappers/from-nickel-compose.sh
+../../scripts/from-nickel-compose.sh
 ```
 
 What happens:
@@ -87,7 +87,7 @@ let fragments = [
 Order matters: later fragments override scalars and concat arrays.
 This is the simplest setup — no environment variable required.
 
-### Option B: NICKEL_COMPOSE-driven (wrappers/from-nickel-compose.sh)
+### Option B: NICKEL_COMPOSE-driven (scripts/from-nickel-compose.sh)
 
 If you already maintain a list of fragments in env vars (in `.env`,
 `.bashrc`, mise `[env]`, etc.), the wrapper reads `NICKEL_COMPOSE`
@@ -99,18 +99,18 @@ forms are allowed:
 ```bash
 # Stage 0 — single env var holding the full list
 export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
-NICKEL_COMPOSE='$COMPOSE_FILE' ../../wrappers/from-nickel-compose.sh
+NICKEL_COMPOSE='$COMPOSE_FILE' ../../scripts/from-nickel-compose.sh
 
 # Stage 1 — split into services / overlays / file
 export COMPOSE_SERVICES="services/web.yml:services/db.yml"
 export COMPOSE_OVERLAYS="overlays/dev.yml"
 export COMPOSE_FILE="base.yml"
 NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
-  ../../wrappers/from-nickel-compose.sh
+  ../../scripts/from-nickel-compose.sh
 
 # Literal-only — no env-var indirection at all
 NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-  ../../wrappers/from-nickel-compose.sh
+  ../../scripts/from-nickel-compose.sh
 ```
 
 Internally the wrapper generates a temporary `config.ncl` with literal
@@ -146,7 +146,7 @@ or:
 ```bash
 # Option B — NICKEL_COMPOSE-driven
 export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
-NICKEL_COMPOSE='$COMPOSE_FILE' ../../wrappers/from-nickel-compose.sh
+NICKEL_COMPOSE='$COMPOSE_FILE' ../../scripts/from-nickel-compose.sh
 podman-compose config
 ```
 
@@ -170,7 +170,7 @@ wire the wrapper into your project's `mise.toml`:
 
 ```toml
 [hooks]
-cd = "QUIET=true $NC_ROOT/wrappers/from-nickel-compose.sh"
+cd = "QUIET=true $NC_ROOT/scripts/from-nickel-compose.sh"
 ```
 
 (where `$NC_ROOT` is the path to your nickel-compose install —
@@ -187,7 +187,7 @@ your current `NICKEL_COMPOSE`.
    ```
 2. Copy `config.ncl` (Option A) into your project, OR set up
    `NICKEL_COMPOSE` in your shell / `.env` / mise `[env]` (Option B)
-   and reference `nickel-compose/wrappers/from-nickel-compose.sh`
+   and reference `nickel-compose/scripts/from-nickel-compose.sh`
    from a cd hook or `mise run render`.
 3. Add the cd hook to your `mise.toml`.
 4. `mise trust && mise install`

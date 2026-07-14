@@ -129,7 +129,7 @@ export COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
 export NICKEL_COMPOSE='$COMPOSE_FILE'
 
 # render via the wrapper:
-$MISE_PROJECT_ROOT/../../wrappers/from-nickel-compose.sh
+$MISE_PROJECT_ROOT/../../scripts/from-nickel-compose.sh
 ```
 
 What happens:

@@ -11,7 +11,7 @@
 #   order.
 #
 # If you prefer to drive the fragment list from an environment
-# variable, see `../../wrappers/from-nickel-compose.sh` — it reads
+# variable, see `../../scripts/from-nickel-compose.sh` — it reads
 # $NICKEL_COMPOSE, generates a temporary config.ncl with literal
 # imports, and runs nickel export.
 

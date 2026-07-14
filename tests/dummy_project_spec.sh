@@ -135,7 +135,7 @@ EOF
   }
 
   it "NICKEL_COMPOSE literal-only (no \$VAR refs) produces equivalent output" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       # Literal-path form: NICKEL_COMPOSE='a:b:c' is the same input
       # shape as the deleted COMPOSE_FRAGMENTS wrapper.
@@ -162,7 +162,7 @@ EOF
   }
 
   it "NICKEL_COMPOSE-driven wrapper (Stage 0): single env var" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       WRAPPER_OUT="$(pwd)/out/wrapper-stage0.yml"
       (
@@ -188,7 +188,7 @@ EOF
   }
 
   it "NICKEL_COMPOSE-driven wrapper (Stage 1): split env vars" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       WRAPPER_OUT="$(pwd)/out/wrapper-stage1.yml"
       (
@@ -216,7 +216,7 @@ EOF
   }
 
   it "NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       WRAPPER_OUT="$(pwd)/out/wrapper-mixed.yml"
       (
@@ -243,7 +243,7 @@ EOF
   }
 
   it "wrapper errors when NICKEL_COMPOSE is unset" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       ERR_LOG="$(pwd)/out/wrapper-unset.stderr"
       (
@@ -262,7 +262,7 @@ EOF
   }
 
   it "wrapper errors when \$VAR reference expands empty" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       ERR_LOG="$(pwd)/out/wrapper-empty-var.stderr"
       (
@@ -282,7 +282,7 @@ EOF
   }
 
   it "wrapper errors when --out collides with a fragment" && {
-    WRAPPER="$ROOT/wrappers/from-nickel-compose.sh"
+    WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
     if [[ -x "$WRAPPER" ]]; then
       ERR_LOG="$(pwd)/out/wrapper-collision.stderr"
       (

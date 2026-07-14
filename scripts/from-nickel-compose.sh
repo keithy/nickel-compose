@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wrappers/from-nickel-compose.sh — render compose.yml from $NICKEL_COMPOSE.
+# scripts/from-nickel-compose.sh — render compose.yml from $NICKEL_COMPOSE.
 #
 # NICKEL_COMPOSE is a colon-separated list. Each token is either:
 #   - an env-var reference: $FOO or FOO
@@ -12,10 +12,10 @@
 #
 # Usage:
 #   NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
-#     ./wrappers/from-nickel-compose.sh
+#     ./scripts/from-nickel-compose.sh
 #   NICKEL_COMPOSE='base.yml:services/web.yml:services/db.yml' \
-#     ./wrappers/from-nickel-compose.sh
-#   ./wrappers/from-nickel-compose.sh --out my.yml
+#     ./scripts/from-nickel-compose.sh
+#   ./scripts/from-nickel-compose.sh --out my.yml
 #
 # Migration stages (see WORKFLOW.md):
 #   Stage 0: NICKEL_COMPOSE='$COMPOSE_FILE'              (zero work)

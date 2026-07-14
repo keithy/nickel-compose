@@ -3,7 +3,7 @@
 # Generic merge engine for podman/docker compose fragments.
 #
 # This file evaluates to a single function `build` that takes a list
-# of YAML fragments and returns a merged Compose record.
+# of YAML/NCL fragments and returns a merged Compose record.
 #
 # Usage:
 #   let build = import "./lib/merge.ncl" in
