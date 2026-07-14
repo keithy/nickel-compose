@@ -311,12 +311,40 @@ in
 # discover, etc.) without breaking callers. Imports this file with
 # `let composer = import "./nickel-compose.ncl" in` then call
 # `composer.merge fragments`.
+#
+# Namespaces (currently placeholders, see below):
+#   composer.merge fragments           # the main entry point
+#   composer.report.<field> merged     # extract structured data
+#   composer.discover.<thing> root     # find things in the file system
+#   composer.validation.<rule> merged  # check for problems
 {
   merge = fun fragments =>
     let prepped = std.array.map with_defaults fragments in
     let merged = merge_all prepped in
     let resolved = resolve_conditionals merged in
     synthesize resolved,
+
+  # Report namespace: extract structured data from a merged record.
+  #   composer.report.ports merged
+  #   -> [{ service = "web", host_port = "8080", container_port = "80" }, ...]
+  # Each sub-function takes a merged record and returns a list of
+  # records describing what was found. Empty for absent data.
+  report = {},
+
+  # Discover namespace: find things in the file system.
+  #   composer.discover.fragments root
+  #   -> ["path/to/frag.yml", "path/to/frag.ncl", ...]
+  # Operates on a directory path, not a merged record. Different
+  # problem space from report.
+  discover = {},
+
+  # Validation namespace: check for problems in a merged record
+  # (or in a report). Each sub-function returns a list of issues:
+  #   composer.validation.ports merged
+  #   -> [{ service = "web", host_port = "8080", conflicts_with = "admin" }, ...]
+  # Empty list = no issues. Caller decides how to handle issues
+  # (fail, warn, log).
+  validation = {},
 
   version = "0.1.0",
 }

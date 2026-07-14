@@ -46,4 +46,29 @@ describe "typecheck" && {
       should_succeed
     done
   }
+
+  it "exports merge, version, and placeholder namespaces (report, discover, validation)" && {
+    # The engine exports a record with the main merge function,
+    # a version string, and three placeholder namespaces (empty
+    # records) for future report/discover/validation sub-functions.
+    cat > "out/namespace-check.ncl" <<EOF
+let composer = import "$ROOT/nickel-compose.ncl" in
+{
+  has_merge = std.record.has_field "merge" composer,
+  has_version = std.record.has_field "version" composer,
+  has_report = std.record.has_field "report" composer,
+  has_discover = std.record.has_field "discover" composer,
+  has_validation = std.record.has_field "validation" composer,
+  version_is_string = std.is_string composer.version,
+}
+EOF
+    run nickel export --format json "out/namespace-check.ncl" > "out/namespace-check.json"
+    should_succeed
+    expect_jq "out/namespace-check.json" ".has_merge" to_be "true"
+    expect_jq "out/namespace-check.json" ".has_version" to_be "true"
+    expect_jq "out/namespace-check.json" ".has_report" to_be "true"
+    expect_jq "out/namespace-check.json" ".has_discover" to_be "true"
+    expect_jq "out/namespace-check.json" ".has_validation" to_be "true"
+    expect_jq "out/namespace-check.json" ".version_is_string" to_be "true"
+  }
 }
