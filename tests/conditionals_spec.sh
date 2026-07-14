@@ -20,7 +20,7 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
-BUILD="let nc = import \"$ROOT/lib/nickel-compose.ncl\" in"
+BUILD="let composer = import \"$ROOT/nickel-compose.ncl\" in"
 FIXTURE_WITH="$ROOT/tests/fixtures/conditionals/with-redis.ncl"
 FIXTURE_WITHOUT="$ROOT/tests/fixtures/conditionals/without-redis.ncl"
 
@@ -33,7 +33,7 @@ describe "if_present conditionals" && {
     # processes the conditional, not just outputs the raw record.
     cat > "out/with-redis.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WITH" ]
+composer.merge [ import "$FIXTURE_WITH" ]
 EOF
     run nickel export --format json "out/with-redis.ncl" > "out/with-redis.json"
     should_succeed
@@ -42,7 +42,7 @@ EOF
   it "renders without-redis fixture to JSON" && {
     cat > "out/without-redis.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WITHOUT" ]
+composer.merge [ import "$FIXTURE_WITHOUT" ]
 EOF
     run nickel export --format json "out/without-redis.ncl" > "out/without-redis.json"
     should_succeed
@@ -78,7 +78,7 @@ describe "if_present wildcard gates" && {
     # fires and web gains REDIS_HOST.
     cat > "out/wildcard-match.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WC_MATCH" ]
+composer.merge [ import "$FIXTURE_WC_MATCH" ]
 EOF
     run nickel export --format json "out/wildcard-match.ncl" > "out/wildcard-match.json"
     should_succeed
@@ -91,7 +91,7 @@ EOF
     # exists. No match, patch is skipped.
     cat > "out/wildcard-nomatch.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WC_NOMATCH" ]
+composer.merge [ import "$FIXTURE_WC_NOMATCH" ]
 EOF
     run nickel export --format json "out/wildcard-nomatch.ncl" > "out/wildcard-nomatch.json"
     should_succeed
@@ -105,7 +105,7 @@ EOF
     # and escape properly.
     cat > "out/dot-literal.ncl" <<EOF
 $BUILD
-nc.merge [
+composer.merge [
   {
     services = {
       web = { image = "nginx:1.27" },
@@ -134,7 +134,7 @@ describe "if_absent conditionals" && {
   it "renders with-postgres fixture to JSON" && {
     cat > "out/with-postgres.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WITH_PG" ]
+composer.merge [ import "$FIXTURE_WITH_PG" ]
 EOF
     run nickel export --format json "out/with-postgres.ncl" > "out/with-postgres.json"
     should_succeed
@@ -143,7 +143,7 @@ EOF
   it "renders without-postgres fixture to JSON" && {
     cat > "out/without-postgres.ncl" <<EOF
 $BUILD
-nc.merge [ import "$FIXTURE_WITHOUT_PG" ]
+composer.merge [ import "$FIXTURE_WITHOUT_PG" ]
 EOF
     run nickel export --format json "out/without-postgres.ncl" > "out/without-postgres.json"
     should_succeed
@@ -179,7 +179,7 @@ describe "conditional resolution order" && {
     # NOT declared, so if_absent.services.redis also fires.
     cat > "out/order.ncl" <<EOF
 $BUILD
-nc.merge [
+composer.merge [
   import "$FIXTURE_ORDER",
   { services = { postgres = { image = "postgres:external" } } },
 ]

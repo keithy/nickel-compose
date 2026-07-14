@@ -6,7 +6,7 @@
 # Usage:
 #   nickel eval tests/merge.ncl
 
-let nc = import "../lib/nickel-compose.ncl" in
+let composer = import "../nickel-compose.ncl" in
 
 # Two synthetic fragments: base service + overlay that adds one env.
 let base = {
@@ -29,7 +29,7 @@ let overlay = {
   },
 } in
 
-let result = nc.merge [base, overlay] in
+let result = composer.merge [base, overlay] in
 
 # Expected after merge:
 #   services.web.image = "nginx:1.27"

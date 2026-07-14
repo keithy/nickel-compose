@@ -100,7 +100,7 @@ describe "dummy-project end-to-end" && {
     # declares them with null too — verify driver field exists
     # when explicitly supplied via a custom fragment.
     cat > "out/.driver-test.ncl" <<EOF
-let nc = import "$ROOT/lib/nickel-compose.ncl" in
+let composer = import "$ROOT/nickel-compose.ncl" in
 let svc = {
   services = {
     cache = {
@@ -114,7 +114,7 @@ let driver_frag = {
     "cache-data" = { driver = "local", driver_opts = { type = "nfs" } },
   },
 } in
-nc.merge [svc, driver_frag]
+composer.merge [svc, driver_frag]
 EOF
     run nickel export --format json "out/.driver-test.ncl" \
       > "out/dummy/compose-driver.json"

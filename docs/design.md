@@ -47,7 +47,7 @@ not to mention the availability of write-time validation.
 | No picker | `config.ncl` *is* the picker. Declarative list of fragments. |
 | `COMPOSE_FILE` | `NICKEL_COMPOSE` for the input list (clearly named for its role; accepts literal paths and `$VAR` references). `${VAR}` interpolation works the same way compose does — Nickel passes the strings through verbatim. |
 | No typecheck | Contracts. Missing field → typecheck error with file:line, before any container starts. Per-fragment contracts as needed (`GoclawBase`, `PostgresBase`, etc.). |
-| Not composable | One merge engine in `lib/nickel-compose.ncl`. `array_fields` list controls concat-vs-replace. Records recurse. Records union at the top level. All explicit, all in one file, all readable. |
+| Not composable | One merge engine in `nickel-compose.ncl`. `array_fields` list controls concat-vs-replace. Records recurse. Records union at the top level. All explicit, all in one file, all readable. |
 | Needs `base.yml` | The merge engine synthesizes top-level `volumes:` and `networks:` from service references. No root fragment required for projects with named volumes — the engine extracts `<name>:/path` patterns from `services.<svc>.volumes` and emits `volumes: { <name> = null }`. Pre-declared entries (with `driver`, `driver_opts`, etc.) win over synthesis. Bind mounts (`./path:`, `/abs:`, `${VAR}:`) are skipped. The `default` network is skipped (compose handles it implicitly). |
 | Cross-fragment references | `if_present::services::redis` and `if_absent::services::postgres` — a fragment can declare patches that fire only when specific keys exist (or don't) in the merged record. The patch declares its own top-level structure; the engine merges at the top level. Resolution order: `if_absent` first, then `if_present`. Both fields are stripped from output. |
 | Order matters silently | Order still matters for `b wins on collision` semantics — that's intrinsic to overlay composition. But the typecheck catches missing required keys regardless of order, and the merge engine's behavior is the same in both directions of any two-fragment merge. |
@@ -83,7 +83,7 @@ in a sensible order:
 ```nickel
 # config.ncl — single-file deployment description.
 
-let nc = import "nickel-compose/lib/nickel-compose.ncl" in
+let composer = import "nickel-compose/nickel-compose.ncl" in
 
 let fragments = [
   # === Root: networks and named volumes ===
@@ -116,7 +116,7 @@ let fragments = [
   },
 ] in
 
-nc.merge fragments
+composer.merge fragments
 ```
 
 Same merge engine, same output. Comments live where humans read
@@ -189,7 +189,7 @@ The LLM that writes compose YAML produces something:
 
 ## Status
 
-The merge engine (`lib/nickel-compose.ncl`) with **top-level volume and
+The merge engine (`nickel-compose.ncl`) with **top-level volume and
 network synthesis**, **conditional patches** (`if_present` and
 `if_absent`), the typecheck scaffolding, and the wrapper are
 working. The example (dummy-project) shows both authoring modes

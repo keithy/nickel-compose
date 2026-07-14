@@ -11,8 +11,8 @@ cd "$(dirname "$0")"
 ROOT="$(cd .. && pwd)"
 
 describe "typecheck" && {
-  it "lib/nickel-compose.ncl typechecks" && {
-    run nickel typecheck "$ROOT/lib/nickel-compose.ncl"
+  it "nickel-compose.ncl typechecks" && {
+    run nickel typecheck "$ROOT/nickel-compose.ncl"
     should_succeed
   }
 

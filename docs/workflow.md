@@ -32,7 +32,7 @@ The user's `.ncl` file has the structure of a typed record. It
 imports the merge engine and lists fragments (or inlines them):
 
 ```nickel
-let nc = import "nickel-compose/lib/nickel-compose.ncl" in
+let composer = import "nickel-compose/nickel-compose.ncl" in
 
 let fragments = [
   # Root: networks + named volumes
@@ -64,7 +64,7 @@ let fragments = [
   },
 ] in
 
-nc.merge fragments
+composer.merge fragments
 ```
 
 The `fragments` list can also import YAML files (decomposed
@@ -219,7 +219,7 @@ Same merged output.
 
 ```nickel
 # compose.ncl
-let nc = import "nickel-compose/lib/nickel-compose.ncl" in
+let composer = import "nickel-compose/nickel-compose.ncl" in
 
 let fragments = [
   import "base.yml",
@@ -228,7 +228,7 @@ let fragments = [
   import "overlays/dev.yml",
 ] in
 
-nc.merge fragments
+composer.merge fragments
 ```
 
 Drop the env vars. `nickel export --format yaml compose.ncl >

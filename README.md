@@ -72,10 +72,10 @@ config.ncl  --[nickel export]-->  compose.yaml  --[podman compose]-->  container
    +-- merges fragments with Compose semantics
 ```
 
-The merge engine (`lib/nickel-compose.ncl`) is a single Nickel
+The merge engine (`nickel-compose.ncl`) is a single Nickel
 file that exports a record of functions. The main one, `merge`,
 takes a list of fragments and returns a merged Compose record.
-`config.ncl` calls `nc.merge` with the fragments it has selected.
+`config.ncl` calls `composer.merge` with the fragments it has selected.
 Future helpers (validate, discover, etc.) can be added to the
 record without breaking callers.
 
@@ -198,12 +198,12 @@ Each service gets these defaults filled in if missing:
 ```
 
 If a fragment already sets `networks`, that wins. Override the
-defaults in `lib/nickel-compose.ncl`'s `default_service` record.
+defaults in `nickel-compose.ncl`'s `default_service` record.
 
 ## Writing a config
 
 ```nickel
-let nc = import "../lib/nickel-compose.ncl" in
+let composer = import "../nickel-compose.ncl" in
 
 let fragments = [
   import "./base.yml",
@@ -212,7 +212,7 @@ let fragments = [
   import "./overlays/dev.yml",
 ] in
 
-nc.merge fragments
+composer.merge fragments
 ```
 
 A root fragment is optional. If your services reference named

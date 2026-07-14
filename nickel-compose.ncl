@@ -1,6 +1,6 @@
-# nickel-compose/lib/nickel-compose.ncl
+# nickel-compose/nickel-compose.ncl
 #
-# Generic merge engine for podman/docker compose fragments.
+# The merge engine. Single file, drop-in usable.
 #
 # This file evaluates to a record with at least one function:
 #   - merge: takes a list of YAML/NCL fragments, returns the merged
@@ -8,8 +8,8 @@
 #     patches applied and top-level declarations synthesized).
 #
 # Usage:
-#   let nc = import "./lib/nickel-compose.ncl" in
-#   nc.merge [frag1, frag2, ...]
+#   let composer = import "./nickel-compose.ncl" in
+#   composer.merge [frag1, frag2, ...]
 #
 # The import is bound to a record so future helpers (validate,
 # discover, etc.) can be added without breaking callers — just
@@ -309,8 +309,8 @@ in
 
 # Public entry point. The record form lets us add helpers (validate,
 # discover, etc.) without breaking callers. Imports this file with
-# `let nc = import "./lib/nickel-compose.ncl" in` then call
-# `nc.merge fragments`.
+# `let composer = import "./nickel-compose.ncl" in` then call
+# `composer.merge fragments`.
 {
   merge = fun fragments =>
     let prepped = std.array.map with_defaults fragments in
