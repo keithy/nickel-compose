@@ -139,6 +139,37 @@ Use cases:
 For the LSP, `nickel query` is the right tool. For the
 `_check` strip problem in the wrapper, it doesn't help.
 
+## Compose `x-*` extension fields
+
+The Compose spec reserves top-level fields with the `x-`
+prefix as **extension fields**: silent to the runtime, free
+to be used for custom metadata, tooling hints, or
+experimental features. `podman compose config` and
+`docker compose config` accept `x-*` without warning;
+unknown fields without the `x-` prefix would be rejected.
+
+This is useful for nickel-compose in two ways:
+
+1. **Avoiding the `_check` strip problem.** If a field
+   name starts with `x-`, no annotation is needed — the
+   Compose runtime ignores it. The `x-` prefix is the
+   convention. The current engine uses `_check` (with
+   `| not_exported` and a wrapper-side strip); renaming
+   to `x-check` would let the wrapper skip the strip
+   entirely and the YAML would still be valid Compose.
+2. **User-facing metadata.** Users can add their own
+   `x-*` fields to fragments for any purpose: cost
+   centers, owner teams, deploy notes. The engine
+   preserves them through the merge (it's just a regular
+   record field). They flow into the rendered YAML and
+   are ignored by `podman compose`, but tooling can read
+   them.
+
+When designing a new metadata field, ask: does the
+runtime need to ignore it? If yes, use `x-`. If it should
+flow into the schema validation (e.g. it's a constraint
+the engine enforces), use a real field with a contract.
+
 ## Public record
 
 ```nickel
@@ -200,7 +231,16 @@ mise run render
   *values*; runtime validation goes through `check`. Don't
   add value-level contract annotations.
 - The `not_exported` annotation doesn't survive `nickel eval`
-  serialization. The wrapper handles the strip. Don't try
-  to move the strip into the engine.
+  serialization. **If the engine ever needs a field that the
+  rendered YAML should ignore, name it with the `x-` prefix
+  (e.g. `x-check` instead of `_check`).** Compose's spec
+  reserves `x-*` as extension fields that are silently
+  ignored by the runtime, so `podman compose config` won't
+  complain. `nickel export` keeps `x-*` fields in the YAML
+  output. This sidesteps the annotation lifecycle issue
+  entirely. The current `_check` name is fine; the
+  workaround for it lives in the wrapper. If a future
+  field is added that doesn't need the wrapper's strip
+  step, prefer `x-*` naming.
 - `| optional` strips fields from the record. We don't use
   it on contracts. Don't start.
