@@ -71,10 +71,11 @@ let fragments = [
 composer.merge_with_check fragments
 ```
 
-The result is a record that includes a `_check` field with the
-schema report. The `_check` field is annotated `not_exported`, so
-`nickel export` strips it from `compose.yaml`. `nickel eval`
-keeps it (so tooling can read it).
+The result is a record that includes an `x-check` field with
+the schema report. `x-check` is a Compose extension field
+(prefix `x-*`), so the runtime ignores it but tooling can
+read it. `nickel export` keeps it in the rendered YAML; that
+output is still valid Compose.
 
 ### Option B: explicit `check` call
 
@@ -99,16 +100,17 @@ This pattern is shown in `examples/dummy-project/config_with_check.ncl`.
 Use it when you need the merged record in two places, or when you
 want to add your own custom checks on top of the engine's.
 
-## How the wrapper uses `_check`
+## How the wrapper uses `x-check`
 
 `scripts/to-compose.sh` always:
 
-1. Writes `compose.ncl` (canonical — with `_check` attached)
-2. Writes `compose.yaml` (derived — `_check` stripped via a small
-   helper that destructures the merged record)
-3. Reads `_check.ok` back from `compose.ncl` via a one-line
+1. Writes `compose.ncl` (canonical — with `x-check` attached)
+2. Writes `compose.yaml` (derived — direct `nickel export`
+   from `compose.ncl`. The `x-check` field is preserved; the
+   Compose runtime ignores it)
+3. Reads `x-check.ok` back from `compose.ncl` via a one-line
    `nickel eval` query
-4. Exits 0 if `_check.ok == true`, 1 otherwise
+4. Exits 0 if `x-check.ok == true`, 1 otherwise
 5. Always produces both artifacts (so `podman compose config`
    can debug a broken state — the bug is visible, not hidden)
 
@@ -187,7 +189,7 @@ Queued for later rounds:
   must pin a major version."
 
 None of these are blocking; the v0.2.0 milestone is about the
-plumbing (contracts, check, merge_with_check, _check annotation,
+plumbing (contracts, check, merge_with_check, x-check field,
 wrapper integration). The actual rules can land incrementally
 without further engine changes.
 
@@ -204,7 +206,7 @@ let fragments = [
   { services = { webb = { image = "nginx:1.27" } } },  # typo: 'webb' not 'web'
 ] in
 composer.merge_with_check fragments
-# => { ..., _check = { ok = false, errors = [
+# => { ..., x-check = { ok = false, errors = [
 #      { service = "webb", field = "image", message = "..." }
 #    ]}}
 ```
@@ -219,7 +221,7 @@ shows what would have happened at `up` time.
 |---|---|
 | `nickel-compose.ncl` | Added `Service`/`Port`/`Volume`/`Network`/`Fragment` contracts, `check` function, `merge_with_check` function. Bumped version to 0.2.0. |
 | `scripts/check.sh` | New. Strict typecheck of engine and optional user config. |
-| `scripts/to-compose.sh` | Uses `merge_with_check` (via the wrapper-generated config.ncl), reads `_check.ok` to set exit code, always produces artifacts, summary to stderr. |
+| `scripts/to-compose.sh` | Uses `merge_with_check` (via the wrapper-generated config.ncl), reads `x-check.ok` to set exit code, always produces artifacts, summary to stderr. |
 | `scripts/from-nickel-compose.sh` | Generates `config.ncl` ending in `composer.merge_with_check fragments`. |
 | `mise/tasks/check` | Now wraps `scripts/check.sh`. |
 | `tests/schema_spec.sh` | New. 44 tests for contracts, check, merge_with_check, wrapper integration. |

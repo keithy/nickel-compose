@@ -6,9 +6,10 @@
 #   - merge: takes a list of YAML/NCL fragments, returns the merged
 #     Compose record (services, networks, volumes, with conditional
 #     patches applied and top-level declarations synthesized).
-#   - merge_with_check: like merge, but attaches a `_check |
-#     not_exported` field carrying the schema report. Visible to
-#     `nickel eval`, stripped from `nickel export`.
+#   - merge_with_check: like merge, but attaches an `x-check`
+#     field carrying the schema report. Compose ignores x-*
+#     fields at runtime, so the rendered YAML stays valid
+#     without needing a strip step in the wrapper.
 #
 # Usage:
 #   let composer = import "./nickel-compose.ncl" in
@@ -561,32 +562,29 @@ in
 # because the field name shadows the let binding at evaluation
 # time. Renaming the binding to `run_merge_with_check` and
 # aliasing in the record keeps the public API clean.
-# Merge and attach the check result. The merged record gets a
-# `_check | not_exported` field carrying the schema report.
-# `nickel export` strips the field (so compose.yaml is clean);
-# `nickel eval` keeps it (so to-compose.sh can read it back to
-# set the exit code).
+# Merge and attach the check result. The merged record gets an
+# `x-check` field carrying the schema report. Compose ignores
+# `x-*` fields at runtime, so the rendered YAML stays valid
+# without a strip step in the wrapper.
 #
 # This is the function `config.ncl` should use when it wants
 # the validation state to travel with the artifact. Plain
 # `merge` is unchanged so existing callers don't break.
 #
-# Implementation note: we destructure `s` and rebuild as a
-# single literal so the `| not_exported` annotation on
-# `_check` is preserved. Record-merge (`&`) strips
-# annotations from the merged-in field, which is why this
-# isn't a one-liner.
+# Note: we use the `x-` prefix instead of `| not_exported`
+# because Compose's spec reserves `x-*` as extension fields
+# that the runtime silently ignores. This sidesteps the
+# annotation lifecycle problem entirely (the `not_exported`
+# annotation would be lost during `nickel eval` serialization,
+# forcing the wrapper to do an explicit destructure-and-rebuild
+# to strip the field). With `x-check`, the YAML stays valid
+# Compose as-is.
 let run_merge_with_check = fun fragments =>
   let prepped = std.array.map with_defaults fragments in
   let m = merge_all prepped in
   let r = resolve_conditionals m in
   let s = synthesize r in
-  {
-    services = s.services,
-    volumes = s.volumes,
-    networks = s.networks,
-    _check | not_exported = run_check s,
-  }
+  s & { x-check = run_check s }
 in
 
 # Public entry point. The record form lets us add helpers

@@ -6,10 +6,10 @@
 #   - composer.Service contract exposes field-level doc/default
 #   - composer.validation.check (and alias composer.check) returns
 #     { ok, errors } for valid and invalid records
-#   - composer.merge_with_check attaches _check to the result
-#   - _check is visible in nickel eval output
-#   - _check is stripped from nickel export (via strip-helper)
-#   - the to-compose.sh wrapper reads _check.ok to set the exit
+#   - composer.merge_with_check attaches x-check to the result
+#   - x-check is a Compose extension field (prefix x-*) so it
+#     stays in the rendered YAML; podman-compose ignores it
+#   - the to-compose.sh wrapper reads x-check.ok to set the exit
 #     code (3 cases: true, false, absent)
 #   - exit code on schema error is 1, but artifacts are still
 #     produced (so podman compose config can debug)
@@ -157,36 +157,36 @@ EOF
 }
 
 describe "composer.merge_with_check" && {
-  it "attaches _check to the result, visible to nickel eval" && {
+  it "attaches x-check to the result, visible to nickel eval" && {
     cat > "out/with-check.ncl" <<EOF
 let composer = import "$NC" in
 {
   result = composer.merge_with_check [
     { services = { web = { image = "nginx:1.27" } } },
   ],
-  has_check = std.record.has_field "_check" (composer.merge_with_check [
+  has_check = std.record.has_field "x-check" (composer.merge_with_check [
     { services = { web = { image = "nginx:1.27" } } },
   ]),
 }
 EOF
     run nickel eval "out/with-check.ncl" > "out/with-check.eval" 2>&1 || true
     # The eval output uses Nickel record syntax; check the eval
-    # form has _check.
-    grep -q "_check" "out/with-check.eval"
+    # form has x-check.
+    grep -q "x-check" "out/with-check.eval"
     should_succeed
   }
 
-  it "the attached _check has ok and errors fields" && {
+  it "the attached x-check has ok and errors fields" && {
     cat > "out/check-shape.ncl" <<EOF
 let composer = import "$NC" in
 let m = composer.merge_with_check [
   { services = { web = { image = "x" } } },
 ] in
 {
-  has_ok = std.record.has_field "ok" m._check,
-  has_errors = std.record.has_field "errors" m._check,
-  ok = m._check.ok,
-  errors_empty = std.array.length m._check.errors == 0,
+  has_ok = std.record.has_field "ok" m."x-check",
+  has_errors = std.record.has_field "errors" m."x-check",
+  ok = m."x-check".ok,
+  errors_empty = std.array.length m."x-check".errors == 0,
 }
 EOF
     run nickel export --format json "out/check-shape.ncl" > "out/check-shape.json"
@@ -197,14 +197,11 @@ EOF
     expect_jq "out/check-shape.json" ".errors_empty" to_be "true"
   }
 
-  it "_check is excluded from rendered JSON when not round-tripped through eval" && {
-    # When a user does `nickel export config.ncl` directly
-    # (config.ncl written by hand, not produced by `nickel
-    # eval`), the `not_exported` annotation on _check is
-    # honored — the field is stripped. This is the case for
-    # direct CLI use; the to-compose wrapper has a different
-    # round-trip behavior because `nickel eval` serializes
-    # without the annotation.
+  it "x-check is present in rendered JSON (it's a Compose x-* extension field)" && {
+    # x-check is a Compose extension field. The x- prefix
+    # tells the runtime to ignore it; nickel export keeps
+    # it in the output. Tooling that wants to read the
+    # schema report can parse the YAML.
     cat > "out/with-check-json.ncl" <<EOF
 let composer = import "$NC" in
 composer.merge_with_check [
@@ -213,8 +210,8 @@ composer.merge_with_check [
 EOF
     run nickel export --format json "out/with-check-json.ncl" > "out/with-check.json"
     should_succeed
-    # _check should not be in the output.
-    expect_jq "out/with-check.json" 'has("_check")' to_be "false"
+    # x-check is in the output (no annotation stripping it).
+    expect_jq "out/with-check.json" '."x-check".ok' to_be "true"
   }
 }
 
@@ -234,12 +231,15 @@ EOF
     # The schema summary lands on stderr.
     grep -q "schema: ok" "out/good.stderr"
     should_succeed
-    # The yaml does not contain _check.
-    if grep -q "^_check:" "out/good.yaml"; then
-      echo "FAIL: _check leaked into compose.yaml"
-      false
-    fi
+    # The yaml has x-check (it's a Compose extension field;
+    # the runtime ignores it but it's preserved for tooling).
+    grep -q "^x-check:" "out/good.yaml"
     should_succeed
+    # podman-compose accepts the yaml.
+    if command -v podman-compose >/dev/null 2>&1; then
+      podman-compose -f "out/good.yaml" config >/dev/null
+      should_succeed
+    fi
   }
 
   it "exits non-zero on schema failure but still produces artifacts" && {
@@ -259,8 +259,8 @@ EOF
     # The schema summary lands on stderr.
     grep -q "schema: errors" "out/bad.stderr"
     should_succeed
-    # The .ncl has the _check field with the error.
-    grep -q "_check" "out/bad.ncl"
+    # The .ncl has the x-check field with the error.
+    grep -q "x-check" "out/bad.ncl"
     should_succeed
   }
 

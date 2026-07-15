@@ -43,3 +43,6 @@ services:
 volumes:
   db-data: null
   web-data: null
+x-check:
+  errors: []
+  ok: true

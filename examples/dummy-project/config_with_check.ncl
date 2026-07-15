@@ -7,7 +7,7 @@
 # merge and check.
 #
 # In production use `composer.merge_with_check` (see config_ncl.ncl)
-# so the result carries the _check field for tooling.
+# so the result carries the x-check field for tooling.
 
 let composer = import "nickel-compose.ncl" in
 

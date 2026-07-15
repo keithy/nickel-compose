@@ -193,9 +193,10 @@ The merge engine (`nickel-compose.ncl`) with **top-level volume and
 network synthesis**, **conditional patches** (`if_present` and
 `if_absent`), **schema contracts** (`Service`, `Port`, `Volume`,
 `Network`, `Fragment` records with field-level doc/default), the
-`check` function and `merge_with_check` (with `_check |
-not_exported` carrying the schema report), and the wrapper
-integration (`to-compose.sh` reads `_check.ok` to set the exit
+`check` function and `merge_with_check` (with `x-check` field
+carrying the schema report; `x-*` is a Compose extension
+field that the runtime silently ignores), and the wrapper
+integration (`to-compose.sh` reads `x-check.ok` to set the exit
 code while always producing both `compose.ncl` and `compose.yaml`)
 are all working. `mise run check` runs the strict typecheck. The
 example (dummy-project) shows both authoring modes (literal list

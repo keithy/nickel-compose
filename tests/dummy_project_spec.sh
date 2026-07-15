@@ -205,21 +205,12 @@ EOF
       expect_jq "out/check-ncl.json" ".ncl_has_volumes" to_be "true"
 
       # Round-trip: deriving .yaml from .ncl must match the
-      # two-step's .yaml output. Both go through the same
-      # strip-helper (drop _check) for the comparison, because
-      # `nickel export` of compose.ncl keeps _check (the
-      # `not_exported` annotation is stripped by `nickel eval`
-      # serialization), while the wrapper's compose.yaml is
-      # produced via the strip-helper.
-      cat > "out/strip-helper.ncl" <<EOF
-let s = (import "./twostep.ncl") in
-{
-  services = s.services,
-  volumes = s.volumes,
-  networks = s.networks,
-}
-EOF
-      run nickel export --format yaml "out/strip-helper.ncl" \
+      # two-step's .yaml output. Both go through `nickel
+      # export` directly; the x-check field is preserved
+      # in both (Compose's x-* extension fields are kept
+      # by nickel export and ignored at runtime). The
+      # comparison is byte-equality of the rendered YAML.
+      run nickel export --format yaml "$NCL_AT" \
         | sed -n '2,$p' > "out/twostep-derived.yaml"
       if ! diff -q "out/twostep-derived.yaml" "out/twostep.yaml" >/dev/null 2>&1; then
         diff "out/twostep-derived.yaml" "out/twostep.yaml" | head -20
@@ -229,7 +220,6 @@ EOF
       should_succeed
 
       rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
-            "out/strip-helper.ncl" \
             "out/check-ncl.ncl" "out/check-ncl.json" \
             "$ROOT/examples/dummy-project/out/twostep-config.ncl"
     else

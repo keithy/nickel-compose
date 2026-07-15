@@ -26,4 +26,4 @@ let fragments = [
   import "./overlays/dev.ncl",
 ] in
 
-composer.merge fragments
+composer.merge_with_check fragments

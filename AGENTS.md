@@ -47,7 +47,7 @@ bottom:
 9. **Contracts** (v0.2.0): `service_schema`, `port_schema`,
    `volume_schema`, `network_schema`, `fragment_schema`
 10. `check_service` / `run_check` — schema validator
-11. `run_merge_with_check` — merge + attach `_check | not_exported`
+11. `run_merge_with_check` — merge + attach `x-check` field
 12. The **public record** — what gets exported
 
 ## Gotchas (these have bitten me)
@@ -73,21 +73,22 @@ record's field list. `std.record.fields S` and
 `std.record.has_field "x" S` both lie. Don't use it on
 contracts the LSP should hover over.
 
-**`_check | not_exported` annotation lifecycle.** The
-annotation works in source code. `nickel export` honors it
-and strips the field. But `nickel eval` serializes the
-record as a literal that **drops** the annotation, so
-subsequent `nickel export` on the eval output keeps the
-field. The `to-compose.sh` wrapper works around this by
-destructuring the record into a new literal. Don't try
-to add the strip in the engine.
+**`x-check` is a Compose extension field.** The engine
+attaches the schema report as `x-check` on the result of
+`merge_with_check`. The `x-` prefix tells the Compose
+runtime to ignore it; the YAML stays valid without a strip
+step in the wrapper. `nickel export` keeps `x-*` fields in
+the output. See "Compose `x-*` extension fields" below.
 
-**Record merge `&` strips annotations.** `base & { hidden
-| not_exported = "x" }` loses the `not_exported`. So
-`synthesize` returns a record, and attaching `_check` via
-`s & { _check | not_exported = run_check s }` doesn't work.
-Workaround: destructure `s` and rebuild as a single literal
-(see `run_merge_with_check`).
+**Record merge `&` works for plain values but loses
+annotations.** `base & { x = 1 }` adds the field fine.
+But `base & { x | not_exported = 1 }` loses the
+`not_exported` annotation. So if you ever need an
+annotated field, write it in a record literal (where
+annotations are preserved) rather than building it via
+`&`. This is why `run_merge_with_check` uses
+`synthesize r & { x-check = ... }` (no annotation
+needed) instead of trying to annotate the field.
 
 ## `nickel query` (read metadata from source)
 
@@ -136,8 +137,10 @@ Use cases:
 - Strip fields from output. That's `nickel export`'s job.
   `nickel query` reads; it doesn't transform.
 
-For the LSP, `nickel query` is the right tool. For the
-`_check` strip problem in the wrapper, it doesn't help.
+For the LSP, `nickel query` is the right tool. It's
+useful for reading metadata from source files; it doesn't
+solve the wrapper's `x-check` field handling because
+`x-check` doesn't need any strip — Compose ignores it.
 
 ## Compose `x-*` extension fields
 
@@ -150,13 +153,12 @@ unknown fields without the `x-` prefix would be rejected.
 
 This is useful for nickel-compose in two ways:
 
-1. **Avoiding the `_check` strip problem.** If a field
-   name starts with `x-`, no annotation is needed — the
-   Compose runtime ignores it. The `x-` prefix is the
-   convention. The current engine uses `_check` (with
-   `| not_exported` and a wrapper-side strip); renaming
-   to `x-check` would let the wrapper skip the strip
-   entirely and the YAML would still be valid Compose.
+1. **The `x-check` schema report field.** The engine
+   attaches the schema validation result as `x-check` on
+   the merged record. Because of the `x-` prefix, the
+   Compose runtime ignores it. The wrapper can read it
+   from the rendered YAML or the canonical `.ncl` without
+   needing a strip step.
 2. **User-facing metadata.** Users can add their own
    `x-*` fields to fragments for any purpose: cost
    centers, owner teams, deploy notes. The engine
@@ -175,7 +177,7 @@ the engine enforces), use a real field with a contract.
 ```nickel
 {
   merge,                  # plain merge
-  merge_with_check,       # merge + _check attached
+  merge_with_check,       # merge + x-check attached
   Service, Port, Volume, Network, Fragment,
   check,                  # alias for validation.check
   validation = { check },
@@ -230,17 +232,11 @@ mise run render
   in nickel 1.17. The contracts are exposed as record
   *values*; runtime validation goes through `check`. Don't
   add value-level contract annotations.
-- The `not_exported` annotation doesn't survive `nickel eval`
-  serialization. **If the engine ever needs a field that the
-  rendered YAML should ignore, name it with the `x-` prefix
-  (e.g. `x-check` instead of `_check`).** Compose's spec
-  reserves `x-*` as extension fields that are silently
-  ignored by the runtime, so `podman compose config` won't
-  complain. `nickel export` keeps `x-*` fields in the YAML
-  output. This sidesteps the annotation lifecycle issue
-  entirely. The current `_check` name is fine; the
-  workaround for it lives in the wrapper. If a future
-  field is added that doesn't need the wrapper's strip
-  step, prefer `x-*` naming.
+- For runtime-ignored metadata fields, use the `x-`
+  prefix (e.g. `x-check`). Compose ignores `x-*` fields at
+  runtime. `nickel export` keeps them in the YAML. Don't
+  try to use `| not_exported` for the same purpose — the
+  annotation is stripped by `nickel eval` serialization,
+  so the field would leak through any two-step workflow.
 - `| optional` strips fields from the record. We don't use
   it on contracts. Don't start.
