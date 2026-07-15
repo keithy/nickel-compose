@@ -1,37 +1,32 @@
 # Agent Instructions for nickel-compose
 
-This file applies to AI agents working in the nickel-compose
-repo. Generic agent behavior rules (Pre-Session Checklist,
-Plan First, Anti-Arrogance Clause) live in the project-level
-`/code/AGENTS.md` and are not repeated here.
+Generic agent rules are in the parent-level `../AGENTS.md`
 
-## Hard rules
+## Testing 
 
-- **Never `git reset --hard`, `git push --force`, or `git
-  commit --amend` without explicit user instruction.** A
-  `--hard` reset in this session already lost work. Reflog
-  exists, but trust the user, not the reflog.
-- **Commit incrementally.** After every meaningful change
-  (contract, function, script, test), commit. Even WIP on a
-  `wip/` branch is better than uncommitted work.
-- **Tests must stay green.** `bash tests/_run.sh` should
-  report 256+/256+ before any commit. If a test breaks, fix
-  it before committing.
+- Tests are bash scripts in `tests/*_spec.sh` using the
+  vendored `tests/lib/bash-spec.sh` (bash-spec 2.1).
+- `tests/_run.sh` runs them all in order.
+- Each spec runs in its directory — paths in the
+  test body are relative to the spec file, not the project.
+- NICKEL_IMPORT_PATH is set per-spec to the project root
+  so fixtures can use `import "nickel-compose.ncl"` without
+  a path prefix.
+- Golden files in `tests/expected/` are byte-equality
+  targets. Set `INIT=true bash tests/_run.sh` to regenerate.
+- `tests/out/` is gitignored. Tests clean it at start.
+- All tests should pass
 
-## Recovery
+Common assertion patterns:
+- `nickel export --format json <file> > <out>` then
+  `expect_jq <out> '.foo.bar' to_be "expected"`
+- `bash scripts/something.sh` then `should_succeed` / `should_fail`
+- `expect <file> to_exist` for file existence
+- `expect_no_diff <gen> <expected>` for golden-file equality
 
-If the working tree gets clobbered, recover from a zrepl
-snapshot:
-
-```bash
-bash /code/zepl/recover.sh latest   # mount most recent
-# ... copy files back, commit them ...
-bash /code/zepl/tidy-up.sh --force  # clean up
-```
-
-zrepl takes snapshots every 15 minutes (see
-`/code/zepl/zrepl.yml`). Worst-case loss window is 15
-minutes of uncommitted work.
+For new tests, follow the clean example pattern in:
+- `tests/conditionals_spec.sh`
+- `tests/schema_spec.sh`
 
 ## Engine structure (load this before editing the engine)
 
@@ -94,6 +89,56 @@ to add the strip in the engine.
 Workaround: destructure `s` and rebuild as a single literal
 (see `run_merge_with_check`).
 
+## `nickel query` (read metadata from source)
+
+`nickel query <file> --field <path> [flag]` reads metadata
+from a source file's AST. It works on **source files**, not
+on `nickel eval` output (which is a literal that has dropped
+all annotations).
+
+Flags:
+- `--doc` — print the `| doc "..."` annotation
+- `--contract` — print the field's contract
+- `--type` — print the field's type
+- `--default` — print the `| default = ...` value
+- `--value` — print the value
+- `--format <json|yaml|...>` — output format (default markdown)
+- `--field <dotted.path>` — query a specific field
+
+The field path must point to a specific field, not a record
+as a whole. `--field composer.Service` returns "no metadata"
+because the record itself has no doc. `--field
+composer.Service.image` returns "container image". To query
+all fields of a contract, walk the field names from the
+record's `record.fields` and call `nickel query` for each.
+
+Use cases:
+- **LSP-style hover**: `nickel query --field
+  composer.Service.image --doc config.ncl` returns the doc
+  comment. This is what tooling should use to surface
+  contract docs to users.
+- **Schema introspection**: `nickel query --field
+  composer.Service --contract config.ncl` returns the full
+  contract record. Useful for a `nickel-compose schema`
+  command.
+- **Default lookup**: `nickel query --field
+  composer.Service.ports --default config.ncl` returns
+  `[]`.
+
+**What `nickel query` does NOT do:**
+- Read `not_exported` annotations. There's no flag for it.
+  `not_exported` is an export-time concern; the `nickel
+  export` tool reads it directly when it serializes. Query
+  tools don't see it.
+- Operate on `nickel eval` output. Eval writes a record
+  literal that has no annotations. Query on eval output
+  returns "no metadata" for everything.
+- Strip fields from output. That's `nickel export`'s job.
+  `nickel query` reads; it doesn't transform.
+
+For the LSP, `nickel query` is the right tool. For the
+`_check` strip problem in the wrapper, it doesn't help.
+
 ## Public record
 
 ```nickel
@@ -112,31 +157,6 @@ Workaround: destructure `s` and rebuild as a single literal
 Add new namespaces by extending the public record. Don't
 add them as top-level let-bindings.
 
-## Test conventions
-
-- Tests are bash scripts in `tests/*_spec.sh` using the
-  vendored `tests/lib/bash-spec.sh` (bash-spec 2.1).
-- `tests/_run.sh` runs them all in order.
-- Each spec runs in `cd "$(dirname "$0")"` — paths in the
-  test body are relative to the spec file, not the project.
-- NICKEL_IMPORT_PATH is set per-spec to the project root
-  so fixtures can use `import "nickel-compose.ncl"` without
-  a path prefix.
-- Golden files in `tests/expected/` are byte-equality
-  targets. Set `INIT=true bash tests/_run.sh` to regenerate.
-- `tests/out/` is gitignored. Tests clean it at start.
-- **Baseline**: 256/256 passing. Don't break this count.
-
-Common assertion patterns:
-- `run nickel export --format json <file> > <out>` then
-  `expect_jq <out> '.foo.bar' to_be "expected"`
-- `run bash scripts/something.sh` then `should_succeed` /
-  `should_fail`
-- `expect <file> to_exist` for file existence
-- `expect_no_diff <gen> <expected>` for golden-file equality
-
-For new tests, follow the pattern in `tests/conditionals_spec.sh`
-or `tests/schema_spec.sh`. They're the cleanest examples.
 
 ## Style
 
