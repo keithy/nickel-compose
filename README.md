@@ -21,6 +21,9 @@ project:
 - auto-fills defaults (networks, restart, init) so fragments stay small
 - synthesizes top-level `volumes:` and `networks:` from service references, so that a root fragment is not needed
 - supports conditional patches (`if_present`, `if_absent`) so a service fragment can adapt to the other services available
+- validates your config against typed contracts — typos in service
+  names, missing `image`, wrong port shapes all fail at typecheck
+  time, not `podman compose up` time
 - exports one `compose.yaml` that both `podman-compose` and
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
@@ -222,48 +225,62 @@ top-level declarations from service references.
 
 ## What's not covered yet
 
-- **Per-fragment typecheck** — contracts work in `nickel typecheck`
-  but break `nickel export`. Needs a separate `check.ncl`.
 - **Cross-fragment validation** — `service.redis.yml` references
   `redis`, but nothing enforces that another file declares it.
-  podman-compose catches this at `up` time.
+  `composer.validation.dependencies` will check this; queued for
+  a later release. podman-compose catches it at `up` time for now.
 - **Non-array field overrides** — Compose's `${VAR:?msg}` is preserved
   through round-trip. The merge engine doesn't validate required envs.
+- **Comprehensive service schema** — `composer.Service` contracts
+  only the fields the engine consumes (image/build, command,
+  environment, volumes, ports, depends_on, networks, restart,
+  init). Everything else passes through untyped. A
+  `ServiceComprehensiveSchema` is a future option if you want
+  full Compose coverage.
+
+See [docs/schema.md](docs/schema.md) for the schema design and roadmap.
 
 ## Status
 
 Verified end-to-end with nickel 1.17.0 and podman-compose 1.6.0.
-Test suite covers env concat, volume concat, default fill, and full
-round-trip through podman-compose.
+Test suite covers env concat, volume concat, default fill, full
+round-trip through podman-compose, schema contracts, the
+`check` function, the `merge_with_check` integration, and the
+`to-compose.sh` wrapper's exit-code behavior.
 
 ## Layout
 
 ```
 nickel-compose/
-├── lib/
-│   └── merge.ncl              # merge engine (single function)
+├── nickel-compose.ncl          # merge engine (single file, drop-in)
+├── scripts/
+│   ├── find-fragments.sh       # discover compose fragments in a tree
+│   ├── from-nickel-compose.sh  # NICKEL_COMPOSE → config.ncl
+│   ├── to-compose.sh           # config.ncl → compose.ncl + compose.yaml (with schema check)
+│   └── check.sh                # strict typecheck (engine + optional user config)
 ├── examples/
-│   ├── dummy-project/         # self-contained first-time-user example
-│   └── podclaws/              # example using real podclaws fragments
+│   ├── dummy-project/          # self-contained first-time-user example
+│   └── podclaws/               # example using real podclaws fragments
 ├── tests/
-│   ├── merge.ncl              # synthetic merge fixture
-│   ├── *_spec.sh              # one bash-spec file per context
+│   ├── merge.ncl               # synthetic merge fixture
+│   ├── *_spec.sh               # one bash-spec file per context
 │   ├── lib/
-│   │   └── bash-spec.sh       # vendored bash-spec 2.1
-│   ├── out/                   # rendered outputs (gitignored)
-│   ├── expected/              # golden snapshots (committed)
-│   └── fixtures/              # synthetic fragments for engine tests
+│   │   └── bash-spec.sh        # vendored bash-spec 2.1
+│   ├── out/                    # rendered outputs (gitignored)
+│   ├── expected/               # golden snapshots (committed)
+│   └── fixtures/               # synthetic fragments for engine tests
 ├── docs/
-│   ├── design.md              # design rationale
-│   ├── workflow.md            # central workflow + migration paths
-│   └── testing.md             # test suite, golden-file testing
+│   ├── design.md               # design rationale
+│   ├── workflow.md             # central workflow + migration paths
+│   ├── schema.md               # contracts, check, merge_with_check
+│   └── testing.md              # test suite, golden-file testing
 ├── mise/
-│   ├── config.toml            # tools (nickel, jq) + task config
+│   ├── config.toml             # tools (nickel, jq) + task config
 │   └── tasks/
-│       ├── check              # typecheck the merge engine
-│       ├── render             # render config to compose.yaml
-│       └── test               # run the bash-spec test suite
-├── nickel-render.sh           # shell wrapper (typecheck + export)
+│       ├── check               # typecheck the engine and user config
+│       ├── render              # render config to compose.yml
+│       └── test                # run the bash-spec test suite
+├── nickel-render.sh            # shell wrapper (typecheck + export)
 ├── README.md
 ├── LICENSE
 └── .gitignore

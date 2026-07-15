@@ -20,7 +20,8 @@ dummy-project/
 │   ├── dev.yml              # local development overlay (adds redis, exposes db)
 │   └── dev.ncl              # Nickel equivalent
 ├── config.ncl               # all-YAML entry point (Stage 0)
-├── config_ncl.ncl           # all-Nickel entry point (Stage 3)
+├── config_ncl.ncl           # all-Nickel entry point (Stage 3) — with schema check
+├── config_with_check.ncl    # explicit composer.check call (Stage 3+)
 ├── config_mixed.ncl         # partial migration demo (Stage 2)
 ├── config_no_base.ncl       # no root fragment — engine synthesizes from services
 └── mise/

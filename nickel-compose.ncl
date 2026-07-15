@@ -6,6 +6,9 @@
 #   - merge: takes a list of YAML/NCL fragments, returns the merged
 #     Compose record (services, networks, volumes, with conditional
 #     patches applied and top-level declarations synthesized).
+#   - merge_with_check: like merge, but attaches a `_check |
+#     not_exported` field carrying the schema report. Visible to
+#     `nickel eval`, stripped from `nickel export`.
 #
 # Usage:
 #   let composer = import "./nickel-compose.ncl" in
@@ -25,6 +28,10 @@
 #     services reference)
 #   - if_present / if_absent: conditional patches that adapt to the
 #     other fragments selected. Gate keys accept regex patterns.
+#   - schema contracts: Service/Port/Volume/Network/Fragment records
+#     with field-level doc comments. The `check` function enforces
+#     the most important rules (every service has image or build);
+#     the contracts are exposed for LSP hover/autocomplete.
 #
 # Tested with nickel 1.17.0.
 
@@ -411,16 +418,192 @@ let list_ports = fun merged =>
     flat
 in
 
-# Public entry point. The record form lets us add helpers (validate,
-# discover, etc.) without breaking callers. Imports this file with
+# === Schema namespace ===
+#
+# Contracts describing the Compose service model. These are
+# records with field-level contracts and doc comments. The
+# engine uses them at runtime via `check` (see below) and the
+# LSP uses them for hover docs and field-name autocompletion.
+#
+# Scope: minimal. We contract only the fields the engine
+# consumes (image/build, ports, volumes, environment,
+# depends_on, networks) plus a few common ones (command,
+# restart, init). Everything else (healthcheck, secrets,
+# deploy, ...) passes through as untyped data. The door stays
+# open for a ServiceComprehensiveSchema later if anyone wants
+# to flesh this out.
+#
+# Note: in nickel 1.17, value annotations `: Service = ...`
+# are treated as static types and break `nickel export`. So
+# we don't ask users to annotate their services. Validation
+# runs through `composer.check` instead, which is plain record
+# matching and works with both `eval` and `export`.
+# Service contract: records with field-level doc/default.
+# `service_schema` is the let-binding; the public record
+# exposes it as `Service` (the field name would shadow the
+# binding at evaluation time).
+let service_schema = {
+  image | String | doc "container image, e.g. nginx:1.27",
+  build | { context | String } | doc "build context, alternative to image",
+  command | Array String | doc "override container command" | default = [],
+  environment | Array String | doc "env vars as KEY=VALUE strings" | default = [],
+  volumes | Array String | doc "volume mounts: host:container or named:/path" | default = [],
+  ports | Array String | doc "port mappings: HOST:CONTAINER or single port" | default = [],
+  depends_on | Array String | doc "services this depends on" | default = [],
+  networks | Array String | doc "networks this service attaches to" | default = [],
+  restart | String | doc "restart policy" | default = "unless-stopped",
+  init | Bool | doc "run an init process inside the container" | default = false,
+} in
+
+# Port contract: a long-form port entry (target + published).
+# Short-form strings like "8080:80" are also accepted by the
+# engine but not modeled here — they parse at use sites.
+# All fields are modelable; none are optional in the schema
+# (in nickel 1.17, `| optional` strips the field from the
+# record, making it invisible to LSP `has_field` checks).
+let port_schema = {
+  target | Number | doc "container port",
+  published | Number | doc "host port",
+  protocol | String | doc "tcp or udp" | default = "tcp",
+  host_ip | String | doc "bind address, e.g. 127.0.0.1",
+} in
+
+# Volume contract: a top-level named volume declaration.
+# Top-level entries can be null (use defaults) or a record
+# with driver/options. Fields model the common cases; exotic
+# options (labels, etc.) are untyped.
+let volume_schema = {
+  driver | String | doc "volume driver, e.g. local",
+  driver_opts | { } | doc "driver-specific options",
+  external | Bool | doc "volume is managed outside compose",
+  name | String | doc "override the volume name",
+} in
+
+# Network contract: a top-level network declaration.
+let network_schema = {
+  driver | String | doc "network driver, e.g. bridge",
+  external | Bool | doc "network is managed outside compose",
+  name | String | doc "override the network name",
+} in
+
+# Fragment contract: a single fragment (one entry in the
+# fragments list). At minimum it can be empty; in practice
+# it declares one or more of services, volumes, networks,
+# if_present, if_absent.
+let fragment_schema = {
+  services | { } | doc "service declarations, keyed by name" | default = {},
+  volumes | { } | doc "top-level volume declarations" | default = {},
+  networks | { } | doc "top-level network declarations" | default = {},
+  if_present | { } | doc "conditional patches gated on presence" | default = {},
+  if_absent | { } | doc "conditional patches gated on absence" | default = {},
+} in
+
+# === Check function ===
+#
+# Walks a merged record and produces a structured report of
+# issues. Returns { ok, errors } where errors is a list of
+# { service, field, message } records. ok = true iff errors
+# is empty.
+#
+# This is the runtime schema validator. It runs after the
+# merge and looks at the final state of each service. It is
+# exposed as `composer.check` so users can call it directly
+# in their `config.ncl`, and used internally by
+# `merge_with_check`.
+#
+# For v0.2.0 we enforce: every service declares `image` or
+# `build`. Port and depends_on validation is intentionally
+# left to later rounds (see TODO in docs/schema.md).
+let check_service = fun name svc =>
+  let has_image = std.record.has_field "image" svc in
+  let has_build = std.record.has_field "build" svc in
+  if has_image || has_build then
+    []
+  else
+    [{
+      service = name,
+      field = "image",
+      message = "service must declare `image` or `build`",
+    }]
+in
+
+# `run_check` rather than `check` so the public record can
+# expose it as `check = run_check` without recursive
+# resolution.
+let run_check = fun merged =>
+  let svcs = if std.record.has_field "services" merged then
+    merged.services
+  else
+    {} in
+  let names = std.record.fields svcs in
+  let errs = std.array.fold_left
+    (fun acc n => acc @ (check_service n svcs."%{n}"))
+    []
+    names
+  in
+  {
+    ok = std.array.length errs == 0,
+    errors = errs,
+  }
+in
+
+# Merge and attach the check result. The merged record gets a
+# `_check | not_exported` field carrying the schema report.
+# `nickel export` strips the field (so compose.yaml is clean);
+# `nickel eval` keeps it (so to-compose.sh can read it back to
+# set the exit code).
+#
+# This is the function `config.ncl` should use when it wants
+# the validation state to travel with the artifact. Plain
+# `merge` is unchanged so existing callers don't break.
+# Local binding for the public-record field. We can't write
+# `merge_with_check = merge_with_check` in the public record
+# because the field name shadows the let binding at evaluation
+# time. Renaming the binding to `run_merge_with_check` and
+# aliasing in the record keeps the public API clean.
+# Merge and attach the check result. The merged record gets a
+# `_check | not_exported` field carrying the schema report.
+# `nickel export` strips the field (so compose.yaml is clean);
+# `nickel eval` keeps it (so to-compose.sh can read it back to
+# set the exit code).
+#
+# This is the function `config.ncl` should use when it wants
+# the validation state to travel with the artifact. Plain
+# `merge` is unchanged so existing callers don't break.
+#
+# Implementation note: we destructure `s` and rebuild as a
+# single literal so the `| not_exported` annotation on
+# `_check` is preserved. Record-merge (`&`) strips
+# annotations from the merged-in field, which is why this
+# isn't a one-liner.
+let run_merge_with_check = fun fragments =>
+  let prepped = std.array.map with_defaults fragments in
+  let m = merge_all prepped in
+  let r = resolve_conditionals m in
+  let s = synthesize r in
+  {
+    services = s.services,
+    volumes = s.volumes,
+    networks = s.networks,
+    _check | not_exported = run_check s,
+  }
+in
+
+# Public entry point. The record form lets us add helpers
+# (validate, discover, etc.) without breaking callers.
+# Imports this file with
 # `let composer = import "./nickel-compose.ncl" in` then call
 # `composer.merge fragments`.
 #
-# Namespaces (currently placeholders, see below):
-#   composer.merge fragments           # the main entry point
-#   composer.report.<field> merged     # extract structured data
-#   composer.discover.<thing> root     # find things in the file system
-#   composer.validation.<rule> merged  # check for problems
+# Namespaces:
+#   composer.merge fragments         # the main entry point
+#   composer.merge_with_check fs     # merge + schema check, attach to result
+#   composer.Service                  # service contract (for LSP / docs)
+#   composer.Port | Volume | Network | Fragment  # other contracts
+#   composer.check merged            # alias for composer.validation.check
+#   composer.validation.check merged # schema validator
+#   composer.report.<field> merged   # extract structured data
+#   composer.discover.<thing> root    # find things in the file system
 {
   merge = fun fragments =>
     let prepped = std.array.map with_defaults fragments in
@@ -428,13 +611,32 @@ in
     let resolved = resolve_conditionals merged in
     synthesize resolved,
 
-  # Report namespace: extract structured data from a merged record.
-  #   composer.report.services merged
+  merge_with_check = run_merge_with_check,
+
+  # Schema contracts (records with field-level doc/default).
+  # Exposed at top level so LSP can resolve them. The engine
+  # does not enforce them via static type annotations
+  # (incompatible with `nickel export` in 1.17). Validation
+  # runs through `check` instead.
+  Service = service_schema,
+  Port = port_schema,
+  Volume = volume_schema,
+  Network = network_schema,
+  Fragment = fragment_schema,
+
+  # Top-level alias for composer.validation.check. Same
+  # function. Two access paths so users can write
+  # `composer.check m` (short) or `composer.validation.check m`
+  # (namespaced). Both resolve to the same function.
+  check = run_check,
+
+  # Report namespace: extract structured data from a merged
+  # record.   composer.report.services merged
   #   -> ["db", "redis", "web"]            # service names
   #   composer.report.ports merged
   #   -> [{ service = "web", host_port = "8080", container_port = "80" }, ...]
-  # Each sub-function takes a merged record and returns a list.
-  # Empty for absent data.
+  # Each sub-function takes a merged record and returns a
+  # list. Empty for absent data.
   report = {
     services = list_services,
     ports = list_ports,
@@ -443,17 +645,21 @@ in
   # Discover namespace: find things in the file system.
   #   composer.discover.fragments root
   #   -> ["path/to/frag.yml", "path/to/frag.ncl", ...]
-  # Operates on a directory path, not a merged record. Different
-  # problem space from report.
+  # Operates on a directory path, not a merged record.
+  # Different problem space from report.
   discover = {},
 
-  # Validation namespace: check for problems in a merged record
-  # (or in a report). Each sub-function returns a list of issues:
-  #   composer.validation.ports merged
-  #   -> [{ service = "web", host_port = "8080", conflicts_with = "admin" }, ...]
-  # Empty list = no issues. Caller decides how to handle issues
-  # (fail, warn, log).
-  validation = {},
+  # Validation namespace: schema/data checks. Each
+  # sub-function returns a list of issues:
+  #   composer.validation.check merged
+  #   -> { ok = Bool, errors = [{service, field, message}, ...] }
+  # Empty errors = no issues. Caller decides how to handle
+  # issues (fail, warn, log). Same function as the top-level
+  # `check`, exposed here for namespace consistency with
+  # report.
+  validation = {
+    check = run_check,
+  },
 
-  version = "0.1.0",
+  version = "0.2.0",
 }
