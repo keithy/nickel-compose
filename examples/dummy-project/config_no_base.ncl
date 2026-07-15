@@ -18,7 +18,7 @@
 # network drivers, or other options that synthesis can't infer
 # (synthesized entries are always `null` body).
 
-let composer = import "../../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 let fragments = [
   import "./services/web.ncl",

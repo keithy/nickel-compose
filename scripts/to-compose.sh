@@ -18,15 +18,23 @@
 #   ./scripts/to-compose.sh --in my-config.ncl    # custom input
 #   ./scripts/to-compose.sh --out merged.yaml     # custom derived path (compose.ncl derived)
 #   ./scripts/to-compose.sh --in dev.ncl --out prod.yaml
+#   ./scripts/to-compose.sh --engine /path/to/nickel-compose.ncl
 #
 # The canonical .ncl path is derived from --out by switching the
 # extension (.yaml -> .ncl, .yml -> .ncl). Both files land in
 # the same directory.
+#
+# The engine is located via --engine (explicit) or by searching
+# common locations (submodule, vendored, script-adjacent). The
+# engine's parent directory is added to NICKEL_IMPORT_PATH so the
+# config.ncl can simply write `import "nickel-compose.ncl"`
+# without a path prefix.
 
 set -euo pipefail
 
 IN="config.ncl"
 OUT="compose.yaml"
+ENGINE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --in)
@@ -35,6 +43,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --out)
       OUT="$2"
+      shift 2
+      ;;
+    --engine)
+      ENGINE="$2"
       shift 2
       ;;
     -h|--help)
@@ -65,11 +77,55 @@ case "$OUT" in
     ;;
 esac
 
+# Locate the engine if not given. Search order:
+#   1. $CWD/nickel-compose/nickel-compose.ncl  (submodule layout)
+#   2. $CWD/nickel-compose.ncl                 (vendored at project root)
+#   3. $SCRIPT_DIR/../nickel-compose.ncl        (script-adjacent;
+#                                               only valid when this
+#                                               script lives in a
+#                                               nickel-compose checkout)
+#   4. NICKEL_COMPOSE_ENGINE env var (explicit override)
+if [[ -z "$ENGINE" ]]; then
+  ENGINE="${NICKEL_COMPOSE_ENGINE:-}"
+fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CWD="$(pwd)"
+if [[ -z "$ENGINE" ]]; then
+  for candidate in \
+      "$CWD/nickel-compose/nickel-compose.ncl" \
+      "$CWD/nickel-compose.ncl" \
+      "$SCRIPT_DIR/../nickel-compose.ncl"; do
+    if [[ -f "$candidate" ]]; then
+      ENGINE="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$ENGINE" || ! -f "$ENGINE" ]]; then
+  echo "engine not found: looked for nickel-compose.ncl in" >&2
+  echo "  \$CWD/nickel-compose/nickel-compose.ncl" >&2
+  echo "  \$CWD/nickel-compose.ncl" >&2
+  echo "  \$SCRIPT_DIR/../nickel-compose.ncl" >&2
+  echo "use --engine <path> or set NICKEL_COMPOSE_ENGINE to override" >&2
+  exit 1
+fi
+# The engine's parent directory is the NICKEL_IMPORT_PATH entry.
+ENGINE_DIR="$(dirname "$ENGINE")"
+# Resolve to absolute for NICKEL_IMPORT_PATH.
+[[ "$ENGINE_DIR" != /* ]] && ENGINE_DIR="$(cd "$ENGINE_DIR" && pwd)"
+
 if command -v mise >/dev/null 2>&1; then
   NICKEL="mise exec -- nickel"
 else
   NICKEL="nickel"
 fi
+
+# Set NICKEL_IMPORT_PATH so the config.ncl can simply write
+# `import "nickel-compose.ncl"` without a path prefix. Append
+# (don't replace) so the user can keep additional paths in their
+# own NICKEL_IMPORT_PATH.
+NICKEL_IMPORT_PATH="${NICKEL_IMPORT_PATH:+${NICKEL_IMPORT_PATH}:}${ENGINE_DIR}"
+export NICKEL_IMPORT_PATH
 
 $NICKEL eval "$IN" > "$NCL"
 $NICKEL export --format yaml "$NCL" | sed -n '2,$p' > "$OUT"

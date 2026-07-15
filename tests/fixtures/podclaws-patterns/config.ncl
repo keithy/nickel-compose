@@ -3,7 +3,7 @@
 # Entry point for the podclaws-patterns fixture. Imports the
 # three fixtures above in order. No dependency on /code/podclaws/.
 
-let composer = import "../../../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 let fragments = [
   import "./01-base.yml",

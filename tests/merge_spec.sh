@@ -16,6 +16,9 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
+# NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
+# without a path prefix. Set it once per spec.
+export NICKEL_IMPORT_PATH="$ROOT"
 
 rm -rf out
 mkdir -p out
@@ -62,7 +65,7 @@ describe "merge engine" && {
   context "overlay behavior" && {
     it "overlay networks wins over default [default]" && {
       cat > "out/.override.ncl" <<EOF
-let composer = import "$ROOT/nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 let base = { services = { web = { image = "x" } } } in
 let overlay = { services = { web = { networks = ["other"] } } } in
 composer.merge [base, overlay]

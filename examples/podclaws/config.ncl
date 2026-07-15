@@ -11,7 +11,7 @@
 #
 # Tested with nickel 1.17.0 + podman-compose 1.6.0.
 
-let composer = import "../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 # Fragments — selection happens here. Comment out a line to skip.
 # Order matters: later fragments override scalars and concat arrays.

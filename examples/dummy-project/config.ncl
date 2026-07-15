@@ -15,7 +15,7 @@
 # $NICKEL_COMPOSE, generates a temporary config.ncl with literal
 # imports, and runs nickel export.
 
-let composer = import "../../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 let fragments = [
   import "./base.yml",

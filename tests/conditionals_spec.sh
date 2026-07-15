@@ -20,7 +20,10 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
-BUILD="let composer = import \"$ROOT/nickel-compose.ncl\" in"
+# NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
+# without a path prefix. Set it once per spec.
+export NICKEL_IMPORT_PATH="$ROOT"
+BUILD="let composer = import \"nickel-compose.ncl\" in"
 FIXTURE_WITH="$ROOT/tests/fixtures/conditionals/with-redis.ncl"
 FIXTURE_WITHOUT="$ROOT/tests/fixtures/conditionals/without-redis.ncl"
 

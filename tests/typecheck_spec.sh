@@ -9,6 +9,9 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
+# NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
+# without a path prefix. Set it once per spec.
+export NICKEL_IMPORT_PATH="$ROOT"
 
 describe "typecheck" && {
   it "nickel-compose.ncl typechecks" && {
@@ -52,7 +55,7 @@ describe "typecheck" && {
     # a version string, and three placeholder namespaces (empty
     # records) for future report/discover/validation sub-functions.
     cat > "out/namespace-check.ncl" <<EOF
-let composer = import "$ROOT/nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 {
   has_merge = std.record.has_field "merge" composer,
   has_version = std.record.has_field "version" composer,

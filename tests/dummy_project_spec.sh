@@ -14,6 +14,9 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
+# NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
+# without a path prefix. Set it once per spec.
+export NICKEL_IMPORT_PATH="$ROOT"
 FROM_WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
 
@@ -102,7 +105,7 @@ describe "dummy-project end-to-end" && {
     # declares them with null too — verify driver field exists
     # when explicitly supplied via a custom fragment.
     cat > "out/.driver-test.ncl" <<EOF
-let composer = import "$ROOT/nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 let svc = {
   services = {
     cache = {

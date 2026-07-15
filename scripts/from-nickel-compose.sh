@@ -109,10 +109,11 @@ for path in "${fragment_paths[@]}"; do
 done
 
 # Write the config.ncl. Each fragment becomes a literal import;
-# the engine is imported from the nickel-compose install; the
-# result is composer.merge applied to the fragment list.
+# the engine is imported by filename (no path) — to-compose.sh
+# sets NICKEL_IMPORT_PATH so the engine can be found regardless
+# of where config.ncl lives.
 {
-  echo "let composer = import \"$NC_ROOT/nickel-compose.ncl\" in"
+  echo "let composer = import \"nickel-compose.ncl\" in"
   echo ""
   echo "let fragments = ["
   for path in "${fragment_paths[@]}"; do

@@ -6,7 +6,7 @@
 # Usage:
 #   nickel eval tests/merge.ncl
 
-let composer = import "../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 # Two synthetic fragments: base service + overlay that adds one env.
 let base = {

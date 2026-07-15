@@ -6,7 +6,7 @@
 #
 # Use this config when you've finished migrating fragments off YAML.
 
-let composer = import "../../nickel-compose.ncl" in
+let composer = import "nickel-compose.ncl" in
 
 let fragments = [
   import "./base.ncl",

@@ -18,6 +18,9 @@ cd "$(dirname "$0")"
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
+# NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
+# without a path prefix. Set it once per spec.
+export NICKEL_IMPORT_PATH="$ROOT"
 FIXTURE="$ROOT/tests/fixtures/podclaws-patterns/config.ncl"
 
 rm -rf out
