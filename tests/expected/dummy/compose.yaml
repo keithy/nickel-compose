@@ -46,3 +46,4 @@ volumes:
 x-check:
   errors: []
   ok: true
+x-source: ./config.ncl

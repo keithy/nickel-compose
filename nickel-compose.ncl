@@ -584,7 +584,20 @@ let run_merge_with_check = fun fragments =>
   let m = merge_all prepped in
   let r = resolve_conditionals m in
   let s = synthesize r in
-  s & { x-check = run_check s }
+  s & { x-check = run_check s, x-source = "./config.ncl" }
+in
+
+# Like merge_with_check, but records an explicit source
+# path on the result. The wrapper's generated configs
+# call this with the absolute path of the config.ncl
+# they wrote. `x-source` is a Compose extension field;
+# the runtime ignores it.
+let run_merge_with_source = fun fragments source =>
+  let prepped = std.array.map with_defaults fragments in
+  let m = merge_all prepped in
+  let r = resolve_conditionals m in
+  let s = synthesize r in
+  s & { x-check = run_check s, x-source = source }
 in
 
 # Public entry point. The record form lets us add helpers
@@ -609,7 +622,13 @@ in
     let resolved = resolve_conditionals merged in
     synthesize resolved,
 
+  # Public API:
+  #   merge_with_check fs        — default; x-source is "./config.ncl"
+  #   merge_with_source fs path  — record an explicit source
+  #                                 path on the result as x-source
+  # Both attach x-check (the schema report).
   merge_with_check = run_merge_with_check,
+  merge_with_source = run_merge_with_source,
 
   # Schema contracts (records with field-level doc/default).
   # Exposed at top level so LSP can resolve them. The engine
