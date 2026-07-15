@@ -307,6 +307,110 @@ let resolve_conditionals = fun merged =>
   std.record.remove "if_present" (std.record.remove "if_absent" after_present)
 in
 
+# === Report namespace helpers ===
+#
+# Each report.* function takes a merged compose record and
+# returns a structured view of it. Output is sorted for
+# determinism (alphabetical by service name).
+
+# Parse a Compose port string into a record with host_port,
+# container_port, and protocol fields. Returns 'None if the
+# string is malformed (caller should skip).
+#
+#   "8080"        -> 'Some { host_port = "8080", container_port = "8080", protocol = "tcp" }
+#   "8080:80"     -> 'Some { host_port = "8080", container_port = "80",   protocol = "tcp" }
+#   "8080:80/tcp" -> 'Some { host_port = "8080", container_port = "80",   protocol = "tcp" }
+#   "127.0.0.1:8080:80" -> 'None (bind address — not yet supported)
+let parse_port_string = fun s =>
+  let parts_proto = std.string.split "/" s in
+  let proto = if std.array.length parts_proto == 2 then
+    std.array.at 1 parts_proto
+  else
+    "tcp" in
+  let host_container = std.array.at 0 parts_proto in
+  let parts = std.string.split ":" host_container in
+  let n = std.array.length parts in
+  if n == 1 then
+    'Some { host_port = std.array.at 0 parts, container_port = std.array.at 0 parts, protocol = proto }
+  else if n == 2 then
+    'Some { host_port = std.array.at 0 parts, container_port = std.array.at 1 parts, protocol = proto }
+  else
+    'None
+in
+
+# Parse a single port entry (string or record) into a normalized
+# { host_port, container_port, protocol } record. Returns 'None
+# for container-only ports (no published) or unrecognized shapes.
+let parse_port_entry = fun entry =>
+  if std.is_string entry then
+    parse_port_string entry
+  else if std.is_record entry then
+    let target = get_or entry "target" null in
+    let published = get_or entry "published" null in
+    if target == null then
+      'None
+    else if published == null then
+      # Container-only port (expose, not port). Skip.
+      'None
+    else
+      'Some {
+        host_port = std.string.from published,
+        container_port = std.string.from target,
+        protocol = get_or entry "protocol" "tcp",
+      }
+  else
+    'None
+in
+
+# Convert a service's `ports` field into a list of normalized
+# port records. Handles both string form ("8080:80") and
+# record form ({target, published, protocol}). Returns [] if
+# the service has no ports or the field is malformed.
+let ports_from_service = fun svc =>
+  let raw = get_or svc "ports" [] in
+  if std.is_array raw then
+    std.array.filter_map parse_port_entry raw
+  else
+    []
+in
+
+# List of service names from the merged record. Returns []
+# if the merged record has no services.
+let list_services = fun merged =>
+  let services = get_or merged "services" {} in
+  std.record.fields services
+in
+
+# List of host port bindings across all services, with service
+# attribution. Each entry is { service, host_port, container_port,
+# protocol }. Container-only ports (no host publish) are skipped.
+# Sorted by host_port numerically for determinism.
+let list_ports = fun merged =>
+  let services = get_or merged "services" {} in
+  let names = std.record.fields services in
+  let pairs = std.array.map
+    (fun name =>
+      let svc = services."%{name}" in
+      let ports = ports_from_service svc in
+      std.array.map
+        (fun p => { service = name } & p)
+        ports)
+    names in
+  let flat = std.array.flatten pairs in
+  # Sort numerically by host_port (port numbers are small integers,
+  # so converting to Number is safe). std.array.sort expects a
+  # total-ordering comparator returning the 'Lesser/'Equal/'Greater
+  # enum.
+  std.array.sort
+    (fun a b =>
+      let an = std.string.to_number a.host_port in
+      let bn = std.string.to_number b.host_port in
+      if an < bn then 'Lesser
+      else if an > bn then 'Greater
+      else 'Equal)
+    flat
+in
+
 # Public entry point. The record form lets us add helpers (validate,
 # discover, etc.) without breaking callers. Imports this file with
 # `let composer = import "./nickel-compose.ncl" in` then call
@@ -325,11 +429,16 @@ in
     synthesize resolved,
 
   # Report namespace: extract structured data from a merged record.
+  #   composer.report.services merged
+  #   -> ["db", "redis", "web"]            # service names
   #   composer.report.ports merged
   #   -> [{ service = "web", host_port = "8080", container_port = "80" }, ...]
-  # Each sub-function takes a merged record and returns a list of
-  # records describing what was found. Empty for absent data.
-  report = {},
+  # Each sub-function takes a merged record and returns a list.
+  # Empty for absent data.
+  report = {
+    services = list_services,
+    ports = list_ports,
+  },
 
   # Discover namespace: find things in the file system.
   #   composer.discover.fragments root
