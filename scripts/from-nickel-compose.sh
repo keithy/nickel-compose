@@ -124,7 +124,7 @@ done
   done
   echo "] in"
   echo ""
-  echo "composer.merge_with_source fragments \"$abs_out\""
+  echo "composer.merge_with_check fragments"
 } > "$OUT"
 
 echo "wrote: $OUT (from NICKEL_COMPOSE: $nickel_compose)"
