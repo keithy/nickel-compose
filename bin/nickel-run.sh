@@ -60,7 +60,7 @@
 # NAME=PATH pair is bound as a free identifier — write
 # `cfg.services` not `run.cfg.services`. Common usage:
 #   nickel-run cfg=config.ncl -- 'cfg.services'
-#   nickel-run cfg=config.ncl -- 'compose.merge_with_source cfg _paths.cfg'
+#   nickel-run cfg=config.ncl -- 'compose.merge_fully_validate cfg _paths.cfg'
 #
 # This tool does NOT set NICKEL_IMPORT_PATH. The user controls that.
 # Layered tools (nickel-compose-run) carry domain-specific import

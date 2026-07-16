@@ -2,8 +2,8 @@
 #
 # Example: podclaws deployment using nickel-compose.
 #
-# Bare fragment list. The use script (or nickel export) wraps this
-# with the engine and calls composer.merge_with_source.
+# Bare fragment list. The use verb wraps this with the engine
+# and calls composer.merge_fully_validate.
 #
 # Selection happens here. Comment out a line to skip. Order
 # matters: later fragments override scalars and concat arrays.

@@ -57,17 +57,18 @@ describe "typecheck" && {
     done
   }
 
-  it "exports merge, merge_with_check, check, Service, version, and namespaces" && {
+  it "exports merge, merge_fully_validate, check, Service, version, and namespaces" && {
     # The engine exports a record with: the main merge function,
-    # merge_with_check (with embedded schema check), the Service
-    # contract, the validation.check function (also exposed as a
-    # top-level for ergonomics), a version string, and three
-    # namespaces (report, discover, validation).
+    # merge_fully_validate (with embedded schema check + source
+    # tracking), the Service contract, the validation.check
+    # function (also exposed as a top-level for ergonomics), a
+    # version string, and three namespaces (report, discover,
+    # validation).
     cat > "out/namespace-check.ncl" <<EOF
 let composer = import "nickel-compose.ncl" in
 {
   has_merge = std.record.has_field "merge" composer,
-  has_merge_with_check = std.record.has_field "merge_with_check" composer,
+  has_merge_fully_validate = std.record.has_field "merge_fully_validate" composer,
   has_check = std.record.has_field "check" composer,
   has_service = std.record.has_field "Service" composer,
   has_version = std.record.has_field "version" composer,
@@ -77,7 +78,7 @@ let composer = import "nickel-compose.ncl" in
   has_validation_check = std.record.has_field "check" composer.validation,
   version_is_string = std.is_string composer.version,
   check_is_function = std.is_function composer.check,
-  merge_with_check_is_function = std.is_function composer.merge_with_check,
+  merge_fully_validate_is_function = std.is_function composer.merge_fully_validate,
   service_has_image = std.record.has_field "image" composer.Service,
   service_has_ports = std.record.has_field "ports" composer.Service,
   has_port = std.record.has_field "Port" composer,
@@ -93,7 +94,7 @@ EOF
     run nickel export --format json "out/namespace-check.ncl" > "out/namespace-check.json"
     should_succeed
     expect_jq "out/namespace-check.json" ".has_merge" to_be "true"
-    expect_jq "out/namespace-check.json" ".has_merge_with_check" to_be "true"
+    expect_jq "out/namespace-check.json" ".has_merge_fully_validate" to_be "true"
     expect_jq "out/namespace-check.json" ".has_check" to_be "true"
     expect_jq "out/namespace-check.json" ".has_service" to_be "true"
     expect_jq "out/namespace-check.json" ".has_version" to_be "true"
@@ -103,7 +104,7 @@ EOF
     expect_jq "out/namespace-check.json" ".has_validation_check" to_be "true"
     expect_jq "out/namespace-check.json" ".version_is_string" to_be "true"
     expect_jq "out/namespace-check.json" ".check_is_function" to_be "true"
-    expect_jq "out/namespace-check.json" ".merge_with_check_is_function" to_be "true"
+    expect_jq "out/namespace-check.json" ".merge_fully_validate_is_function" to_be "true"
     expect_jq "out/namespace-check.json" ".service_has_image" to_be "true"
     expect_jq "out/namespace-check.json" ".service_has_ports" to_be "true"
     expect_jq "out/namespace-check.json" ".has_port" to_be "true"

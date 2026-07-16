@@ -249,8 +249,8 @@ See [docs/schema.md](docs/schema.md) for the schema design and roadmap.
 Verified end-to-end with nickel 1.17.0 and podman-compose 1.6.0.
 Test suite covers env concat, volume concat, default fill, full
 round-trip through podman-compose, schema contracts, the
-`check` function, the `merge_with_check` integration, and the
-`to-compose.sh` wrapper's exit-code behavior.
+`check` function, the `merge_fully_validate` integration, and
+the `nickel-compose-use.sh` verb.
 
 ## Layout
 
@@ -268,7 +268,6 @@ nickel-compose/
 │   └── nickel-run.sh            # generic nickel invocation wrapper
 ├── scripts/
 │   ├── dc2nc.sh                 # fragment picker (stdin or --find-all) → bare-list config.ncl
-│   ├── to-compose.sh            # config.ncl → compose.ncl + compose.yaml (with schema check)
 │   └── check.sh                 # strict typecheck (engine + optional user config)
 ├── examples/
 │   ├── dummy-project/          # self-contained first-time-user example
@@ -284,7 +283,7 @@ nickel-compose/
 ├── docs/
 │   ├── design.md               # design rationale
 │   ├── workflow.md             # central workflow + migration paths
-│   ├── schema.md               # contracts, check, merge_with_check
+│   ├── schema.md               # contracts, check, merge_fully_validate
 │   ├── nickel-run.md           # nickel-run wrapper spec (proposed upstream API)
 │   └── testing.md              # test suite, golden-file testing
 ├── mise/
@@ -299,14 +298,11 @@ nickel-compose/
 ```
 
 The dispatcher (`bin/nickel-compose`) shells out to `bin/nickel-compose-<verb>.sh`;
-the verb scripts call the lower-level helpers in `scripts/` (e.g.
-`nickel-compose-use.sh` calls `to-compose.sh`, which calls
-`bin/nickel-compose-run.sh`, which calls `bin/nickel-run.sh`). Verb
-scripts and the engine-bound/generic run tools live in `bin/`;
-domain helpers (the `to-compose.sh` render pipeline, `dc2nc.sh`
-picker, strict typecheck) live in `scripts/`. Don't move a script
-between `bin/` and `scripts/` without also updating the tests that
-reference it by path.
+verb scripts call `bin/nickel-compose-run.sh` for the merge, which
+calls `bin/nickel-run.sh` for the eval. Domain helpers (`dc2nc.sh`
+fragment picker, `check.sh` strict typecheck) live in `scripts/`.
+Don't move a script between `bin/` and `scripts/` without also
+updating the tests that reference it by path.
 
 ## License
 

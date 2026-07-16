@@ -26,7 +26,7 @@ existing projects to this point without forcing a big-bang rewrite.
 
 The user's `config.ncl` is a bare list of fragment imports. The
 dispatcher (`nickel-compose use`) wraps it with the merge
-engine and calls `composer.merge_with_source` at eval time — no
+engine and calls `composer.merge_fully_validate` at eval time — no
 engine import or merge call needed in the file itself:
 
 ```nickel

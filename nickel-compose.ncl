@@ -6,10 +6,11 @@
 #   - merge: takes a list of YAML/NCL fragments, returns the merged
 #     Compose record (services, networks, volumes, with conditional
 #     patches applied and top-level declarations synthesized).
-#   - merge_with_check: like merge, but attaches an `x-check`
-#     field carrying the schema report. Compose ignores x-*
-#     fields at runtime, so the rendered YAML stays valid
-#     without needing a strip step in the wrapper.
+#   - merge_fully_validate: like merge, but runs the schema
+#     validator and attaches an `x-check` field (the report)
+#     plus `x-source` (the literal path the caller passed).
+#     Compose ignores x-* fields at runtime, so the rendered
+#     YAML stays valid without a strip step in the wrapper.
 #
 # Usage:
 #   let composer = import "./nickel-compose.ncl" in
@@ -510,7 +511,7 @@ let fragment_schema = {
 # merge and looks at the final state of each service. It is
 # exposed as `composer.check` so users can call it directly
 # in their `config.ncl`, and used internally by
-# `merge_with_check`.
+# `merge_fully_validate`.
 #
 # For v0.3.0 we enforce: every service declares `image` or
 # `build`. Port and depends_on validation is intentionally
@@ -551,16 +552,15 @@ in
 # Merge and attach the check result. The merged record gets a
 # `_check | not_exported` field carrying the schema report.
 # `nickel export` strips the field (so compose.yaml is clean);
-# `nickel eval` keeps it (so to-compose.sh can read it back to
-# set the exit code).
+# `nickel eval` keeps it (so subsequent tooling can read it back).
 #
 # This is the function `config.ncl` should use when it wants
 # the validation state to travel with the artifact. Plain
 # `merge` is unchanged so existing callers don't break.
 # Local binding for the public-record field. We can't write
-# `merge_with_check = merge_with_check` in the public record
+# `merge_fully_validate = merge_fully_validate` in the public record
 # because the field name shadows the let binding at evaluation
-# time. Renaming the binding to `run_merge_with_check` and
+# time. Renaming the binding to `run_merge_fully_validate` and
 # aliasing in the record keeps the public API clean.
 # Merge and attach the check result. The merged record gets an
 # `x-check` field carrying the schema report. Compose ignores
@@ -579,20 +579,19 @@ in
 # forcing the wrapper to do an explicit destructure-and-rebuild
 # to strip the field). With `x-check`, the YAML stays valid
 # Compose as-is.
-let run_merge_with_check = fun fragments =>
-  let prepped = std.array.map with_defaults fragments in
-  let m = merge_all prepped in
-  let r = resolve_conditionals m in
-  let s = synthesize r in
-  s & { x-check = run_check s, x-source = "./config.ncl" }
-in
-
-# Like merge_with_check, but records an explicit source
-# path on the result. The wrapper's generated configs
-# call this with the absolute path of the config.ncl
-# they wrote. `x-source` is a Compose extension field;
-# the runtime ignores it.
-let run_merge_with_source = fun fragments source =>
+# Full merge + validation. Attaches x-check (schema report) and
+# x-source (literal path the user passed — absolute or relative,
+# as-given, so build artifacts are reproducible across machines)
+# to the result. Both are Compose `x-*` extension fields; the
+# runtime ignores them, the YAML stays valid without a strip step.
+#
+# Unlike the lower-level `merge`, this runs the schema validator
+# (run_check) on the synthesized record. The check result is
+# recorded as `x-check` on the artifact for tooling to consume;
+# this function does NOT act on the result. Pass a failing source
+# path and `use` will still exit 0; run `nickel-compose check`
+# (or inspect compose.ncl.x-check) to enforce.
+let run_merge_fully_validate = fun fragments source =>
   let prepped = std.array.map with_defaults fragments in
   let m = merge_all prepped in
   let r = resolve_conditionals m in
@@ -607,14 +606,15 @@ in
 # `composer.merge fragments`.
 #
 # Namespaces:
-#   composer.merge fragments         # the main entry point
-#   composer.merge_with_check fs     # merge + schema check, attach to result
-#   composer.Service                  # service contract (for LSP / docs)
+#   composer.merge fragments                  # pure merge (no validation)
+#   composer.merge_fully_validate fs source   # merge + schema check
+#                                             # + provenance metadata
+#   composer.Service                          # service contract (for LSP / docs)
 #   composer.Port | Volume | Network | Fragment  # other contracts
-#   composer.check merged            # alias for composer.validation.check
-#   composer.validation.check merged # schema validator
-#   composer.report.<field> merged   # extract structured data
-#   composer.discover.<thing> root    # find things in the file system
+#   composer.check merged                     # alias for composer.validation.check
+#   composer.validation.check merged          # schema validator
+#   composer.report.<field> merged            # extract structured data
+#   composer.discover.<thing> root            # find things in the file system
 {
   merge = fun fragments =>
     let prepped = std.array.map with_defaults fragments in
@@ -622,13 +622,12 @@ in
     let resolved = resolve_conditionals merged in
     synthesize resolved,
 
-  # Public API:
-  #   merge_with_check fs        — default; x-source is "./config.ncl"
-  #   merge_with_source fs path  — record an explicit source
-  #                                 path on the result as x-source
-  # Both attach x-check (the schema report).
-  merge_with_check = run_merge_with_check,
-  merge_with_source = run_merge_with_source,
+  # Full validation entry point. Runs schema validation and
+  # attaches both x-check (report) and x-source (literal path
+  # the user passed) to the result. See run_merge_fully_validate
+  # for details. Used by `nickel-compose use`; users who write
+  # their own configs can call this directly.
+  merge_fully_validate = run_merge_fully_validate,
 
   # Schema contracts (records with field-level doc/default).
   # Exposed at top level so LSP can resolve them. The engine

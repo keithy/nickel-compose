@@ -47,12 +47,12 @@ EOF
     expect "$OUT" to_match '"0\.[0-9]+\.[0-9]+"'
   }
 
-  it "supports the standard 'use' expression: merge_with_source" && {
+  it "supports the standard 'use' expression: merge_fully_validate" && {
     cat > "out/fraglist.ncl" <<'EOF'
 [ { services = { web = { image = "nginx" } } } ]
 EOF
     capture_run "$NCR" "fragments=out/fraglist.ncl" -- \
-      'std.array.length (std.record.fields (compose.merge_with_source fragments _paths.fragments).services)'
+      'std.array.length (std.record.fields (compose.merge_fully_validate fragments _paths.fragments).services)'
     expect "$OUT" to_match '^1$'
   }
 
@@ -61,7 +61,7 @@ EOF
 [ { services = { web = { image = "nginx" } } } ]
 EOF
     capture_run "$NCR" "fragments=out/fraglist.ncl" -- \
-      'compose.merge_with_source fragments _paths.fragments'
+      'compose.merge_fully_validate fragments _paths.fragments'
     # Default: nickel record syntax (not yaml).
     expect "$OUT" to_match 'services ='
     expect "$OUT" to_match 'image = "nginx"'

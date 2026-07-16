@@ -3,9 +3,9 @@
 # This file lists the compose fragments to merge, in order. To add or
 # remove a fragment, edit the list below — that's it.
 #
-# The file is a bare fragment list. The `use` script (or
-# `scripts/to-compose.sh`) wraps it with the engine and calls
-# `composer.merge_with_source` at eval time. You do not need to
+# The file is a bare fragment list. The `use` verb (in
+# `bin/nickel-compose-use.sh`) wraps it with the engine and calls
+# `composer.merge_fully_validate` at eval time. You do not need to
 # import the engine or call the merge function here.
 #
 # Why this is a literal list and not read from $COMPOSE_FILE:

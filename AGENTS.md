@@ -47,7 +47,8 @@ bottom:
 9. **Contracts** (v0.2.0): `service_schema`, `port_schema`,
    `volume_schema`, `network_schema`, `fragment_schema`
 10. `check_service` / `run_check` — schema validator
-11. `run_merge_with_check` — merge + attach `x-check` field
+11. `run_merge_fully_validate` — merge + run schema check +
+    attach `x-check` + `x-source` fields
 12. The **public record** — what gets exported
 
 ## Gotchas (these have bitten me)
@@ -59,8 +60,8 @@ time. So `{ Service = Service }` recurses forever.
 Workaround: name the let with a suffix and alias in the
 record. Existing examples: `service_schema` (let) →
 `Service = service_schema` (record), `run_check` →
-`check = run_check`, `run_merge_with_check` →
-`merge_with_check = run_merge_with_check`. **Don't rename
+`check = run_check`, `run_merge_fully_validate` →
+`merge_fully_validate = run_merge_fully_validate`. **Don't rename
 them back** — the field name is the public API, the let
 name is implementation.
 
@@ -75,7 +76,7 @@ contracts the LSP should hover over.
 
 **`x-check` is a Compose extension field.** The engine
 attaches the schema report as `x-check` on the result of
-`merge_with_check`. The `x-` prefix tells the Compose
+`merge_fully_validate`. The `x-` prefix tells the Compose
 runtime to ignore it; the YAML stays valid without a strip
 step in the wrapper. `nickel export` keeps `x-*` fields in
 the output. See "Compose `x-*` extension fields" below.
@@ -86,7 +87,7 @@ But `base & { x | not_exported = 1 }` loses the
 `not_exported` annotation. So if you ever need an
 annotated field, write it in a record literal (where
 annotations are preserved) rather than building it via
-`&`. This is why `run_merge_with_check` uses
+`&`. This is why `run_merge_fully_validate` uses
 `synthesize r & { x-check = ... }` (no annotation
 needed) instead of trying to annotate the field.
 
@@ -161,7 +162,7 @@ This is useful for nickel-compose in two ways:
    needing a strip step.
 2. **The `x-source` provenance field.** The engine
    attaches the literal path the user passed to `use` (via
-   `merge_with_source fragments "literal-path"`) as
+   `merge_fully_validate fragments "literal-path"`) as
    `x-source`. Literal, not absolute — this keeps build
    artifacts reproducible across machines. The absolute
    path is still available via `_paths.fragments` for
@@ -185,8 +186,7 @@ the engine enforces), use a real field with a contract.
 ```nickel
 {
   merge,                  # plain merge
-  merge_with_check,       # merge + x-check attached
-  merge_with_source,      # merge_with_check + x-source attached
+  merge_fully_validate,   # merge + schema check + x-check + x-source
                           # x-source is the LITERAL path passed
                           # in (relative or absolute, as-given),
                           # not the absolute resolution
@@ -216,8 +216,8 @@ wraps the list with the engine at eval time:
 ]
 ```
 
-The engine is auto-loaded by `nickel-compose-run.sh`, which is
-called by `to-compose.sh`. The engine's parent dir is added to
+The engine is auto-loaded by `bin/nickel-compose-run.sh`, which is
+called by `bin/nickel-compose-use.sh`. The engine's parent dir is added to
 `NICKEL_IMPORT_PATH` automatically — users don't need to set
 it.
 
@@ -247,11 +247,13 @@ implementation is two layers:
   layer over `nickel-run.sh`. Pre-binds the engine as
   `compose` (free identifier, no `run.` prefix) and sets
   `NICKEL_IMPORT_PATH` to the engine's parent dir. This is
-  what `to-compose.sh` and `bin/nickel-compose-report.sh` call.
-- **`scripts/to-compose.sh`** — `use`'s implementation. Calls
-  `nickel-compose-run` to produce `compose.ncl`, then derives
-  `compose.yaml` via `nickel export` and reads `x-check.ok` for
-  the exit code.
+  what `bin/nickel-compose-use.sh` and
+  `bin/nickel-compose-report.sh` call.
+- **`bin/nickel-compose-use.sh`** — `use` verb implementation.
+  Calls `nickel-compose-run` to produce `compose.ncl`, then
+  derives `compose.yaml` via `nickel export`. No exit-code
+  mapping for schema errors — the result is recorded in
+  `x-check` and tooling reads it from there.
 - **`scripts/dc2nc.sh`** — fragment picker. Reads a list of
   candidate paths on stdin (one per line), takes `--pick PATH`
   (repeatable, or as bare positionals), and writes a bare-list
@@ -307,7 +309,7 @@ bash tests/schema_spec.sh -v
 # Render
 mise run render
 # or
-./scripts/to-compose.sh
+./bin/nickel-compose use
 ```
 
 ## Known limitations (don't try to "fix" these)

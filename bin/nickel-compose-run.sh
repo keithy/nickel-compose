@@ -13,7 +13,7 @@
 # inside the expression:
 #
 #   nickel-compose-run cfg=config.ncl -- \
-#     'compose.merge_with_source cfg _paths.cfg'
+#     'compose.merge_fully_validate cfg _paths.cfg'
 #
 # Engine location (search order):
 #   1. $CWD/nickel-compose/nickel-compose.ncl        (submodule)

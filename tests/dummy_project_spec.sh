@@ -24,7 +24,7 @@ export NICKEL_COMPOSE_ROOT="$ROOT"
 # Put the new bin/ on PATH so the dispatcher's verb-scripts and
 # the helper scripts in scripts/ can resolve by bare name.
 export PATH="$ROOT/bin:$ROOT/scripts:$PATH"
-TO_WRAPPER="$ROOT/scripts/to-compose.sh"
+TO_USE="$ROOT/bin/nickel-compose-use.sh"
 NC_RUN="$ROOT/bin/nickel-compose-run.sh"
 DC2NC="$ROOT/scripts/dc2nc.sh"
 NC="$ROOT/bin/nickel-compose"
@@ -39,18 +39,18 @@ describe "dummy-project end-to-end" && {
 
   it "renders YAML without error" && {
     mkdir -p "out/dummy"
-    run "$TO_WRAPPER" --in "$DUMMY" --out "$(pwd)/out/dummy/compose.yaml"
+    run "$TO_USE" "$DUMMY" --out "$(pwd)/out/dummy/compose.yaml"
     should_succeed
   }
 
   it "renders JSON without error" && {
-    # to-compose.sh emits yaml; for JSON we use nickel-compose-run
+    # use emits yaml; for JSON we use nickel-compose-run
     # directly (the underlying engine) and pipe through nickel
     # export --format json.
     run "$NC_RUN" --format json \
       --out "$(pwd)/out/dummy/compose.json" \
       fragments="$DUMMY" -- \
-      'compose.merge_with_source fragments _paths.fragments'
+      'compose.merge_fully_validate fragments _paths.fragments'
     should_succeed
   }
 
@@ -59,16 +59,16 @@ describe "dummy-project end-to-end" && {
   }
 
   it "config_ncl.ncl (all Nickel) produces byte-identical output" && {
-    run "$TO_WRAPPER" \
-      --in "$ROOT/examples/dummy-project/config_ncl.ncl" \
+    run "$TO_USE" \
+      "$ROOT/examples/dummy-project/config_ncl.ncl" \
       --out "$(pwd)/out/dummy/compose-ncl.yml"
     should_succeed
     expect_no_diff_no_xsource "out/dummy/compose-ncl.yml" "expected/dummy/compose.yaml"
   }
 
   it "config_mixed.ncl (mixed YAML + Nickel) produces byte-identical output" && {
-    run "$TO_WRAPPER" \
-      --in "$ROOT/examples/dummy-project/config_mixed.ncl" \
+    run "$TO_USE" \
+      "$ROOT/examples/dummy-project/config_mixed.ncl" \
       --out "$(pwd)/out/dummy/compose-mixed.yml"
     should_succeed
     expect_no_diff_no_xsource "out/dummy/compose-mixed.yml" "expected/dummy/compose.yaml"
@@ -80,14 +80,14 @@ describe "dummy-project end-to-end" && {
     # should be valid compose — podman-compose config accepts it.
     # We render BOTH yaml (for podman-compose validation) and json
     # (for jq structural assertions — jq doesn't read YAML).
-    run "$TO_WRAPPER" \
-      --in "$ROOT/examples/dummy-project/config_no_base.ncl" \
+    run "$TO_USE" \
+      "$ROOT/examples/dummy-project/config_no_base.ncl" \
       --out "$(pwd)/out/dummy/compose-no-base.yml"
     should_succeed
     run "$NC_RUN" --format json \
       --out "$(pwd)/out/dummy/compose-no-base.json" \
       fragments="$ROOT/examples/dummy-project/config_no_base.ncl" -- \
-      'compose.merge_with_source fragments _paths.fragments'
+      'compose.merge_fully_validate fragments _paths.fragments'
     should_succeed
     # The synthesized top-level volumes: web-data, db-data.
     expect_jq "out/dummy/compose-no-base.json" '.volumes | has("web-data")' to_be "true"
@@ -167,7 +167,7 @@ EOF
     # duration of the render — same trick the use path uses.
     config_at="$ROOT/examples/dummy-project/dc2nc-config.ncl"
     cp "$config" "$config_at"
-    "$TO_WRAPPER" --in "$config_at" \
+    "$TO_USE" "$config_at" \
       --out "$ROOT/tests/out/dc2nc.yaml" >/dev/null
     should_succeed
     expect_no_diff_no_xsource "out/dc2nc.yaml" "out/dummy/compose.yaml"
@@ -357,7 +357,7 @@ EOF
     # The .ncl is the source of truth: it must be a valid Nickel
     # file that, when imported, exposes the merged record. The
     # .yaml is a one-way projection of the same record.
-    "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/config.ncl" \
+    "$TO_USE" "$ROOT/examples/dummy-project/config.ncl" \
       --out "out/twostep.yaml" >/dev/null
     should_succeed
 
@@ -404,7 +404,7 @@ EOF
 EOF
     (
       cd "out/literal-src"
-      "$TO_WRAPPER" --in "sub/config.ncl" --out "out/x.yaml" >/dev/null 2>&1
+      "$TO_USE" "sub/config.ncl" --out "out/x.yaml" >/dev/null 2>&1
     )
     should_succeed
     # x-source must be the literal relative path.

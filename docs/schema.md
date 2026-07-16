@@ -17,7 +17,7 @@ missing `image` fields, and wrong port shapes at typecheck time
 | `composer.Network` | record | one top-level network: driver, external, name |
 | `composer.Fragment` | record | one entry in the fragments list: services, volumes, networks, if_present, if_absent |
 | `composer.check` | function | runs schema checks on a merged record, returns `{ ok, errors }` |
-| `composer.merge_with_check` | function | like `merge` but attaches the check result as a `_check` field |
+| `composer.merge_fully_validate` | function | like `merge` but also runs `check` and attaches `x-check` + `x-source` to the result |
 
 Contracts are records with field-level `| doc "..."` annotations.
 The LSP reads them for hover docs and field-name autocompletion.
@@ -54,10 +54,10 @@ checking, and other rules are queued for later rounds — see
 
 ## Two ways to wire the check into your config
 
-### Option A: `merge_with_check` (recommended)
+### Option A: `merge_fully_validate` (recommended)
 
-Use `composer.merge_with_check` instead of `composer.merge` at the
-end of your `config.ncl`:
+Use `composer.merge_fully_validate` instead of `composer.merge`
+at the end of your `config.ncl`:
 
 ```nickel
 let composer = import "nickel-compose.ncl" in
@@ -68,14 +68,14 @@ let fragments = [
   # ...
 ] in
 
-composer.merge_with_check fragments
+composer.merge_fully_validate fragments "literal-source-path"
 ```
 
-The result is a record that includes an `x-check` field with
-the schema report. `x-check` is a Compose extension field
-(prefix `x-*`), so the runtime ignores it but tooling can
-read it. `nickel export` keeps it in the rendered YAML; that
-output is still valid Compose.
+The result is a record that includes `x-check` (the schema
+report) and `x-source` (the literal path you passed in). Both
+are Compose extension fields (prefix `x-*`), so the runtime
+ignores them but tooling can read them. `nickel export` keeps
+them in the rendered YAML; that output is still valid Compose.
 
 ### Option B: explicit `check` call
 
@@ -102,26 +102,27 @@ want to add your own custom checks on top of the engine's.
 
 ## How the wrapper uses `x-check`
 
-`scripts/to-compose.sh` always:
+`bin/nickel-compose-use.sh` (the `use` verb) always:
 
-1. Writes `compose.ncl` (canonical — with `x-check` attached)
-2. Writes `compose.yaml` (derived — direct `nickel export`
-   from `compose.ncl`. The `x-check` field is preserved; the
-   Compose runtime ignores it)
-3. Reads `x-check.ok` back from `compose.ncl` via a one-line
-   `nickel eval` query
-4. Exits 0 if `x-check.ok == true`, 1 otherwise
-5. Always produces both artifacts (so `podman compose config`
-   can debug a broken state — the bug is visible, not hidden)
+1. Writes `compose.ncl` (canonical — with `x-check` and `x-source`
+   attached; re-importable)
+2. Writes `compose.yaml` (derived — direct `nickel export` from
+   `compose.ncl`. The `x-*` fields are preserved; Compose
+   ignores them at runtime)
+3. Exits 0 on successful render, regardless of `x-check.ok`
 
-The exit code is non-zero on schema failure **even though the
-artifacts are written**. CI catches it; humans iterating see
-the broken `compose.yaml` and can poke at it with
-`podman compose config` to understand what went wrong.
+Schema validation runs as part of the merge — the report lands in
+`x-check` on the rendered artifact. `use` does not act on the
+result; tooling reads `x-check.ok` directly when it wants to
+enforce. This separates rendering from validation: a CI step can
+fail on `x-check.ok == false` without coupling to the render
+itself.
 
-For configs that use plain `merge` (not `merge_with_check`),
-the wrapper prints `schema: not checked` and exits 0. This
-preserves backward compatibility for existing configs.
+For configs that use plain `composer.merge` (not
+`composer.merge_fully_validate`), the schema validator is not
+run, no `x-check` field is attached, and the rendered artifact
+is purely the merged record. Use this when you want pure merge
+semantics with no validation overhead.
 
 ## Strict typecheck: `mise run check`
 
@@ -189,7 +190,7 @@ Queued for later rounds:
   must pin a major version."
 
 None of these are blocking; the v0.2.0 milestone is about the
-plumbing (contracts, check, merge_with_check, x-check field,
+plumbing (contracts, check, merge_fully_validate, x-check field,
 wrapper integration). The actual rules can land incrementally
 without further engine changes.
 
@@ -205,25 +206,21 @@ let composer = import "nickel-compose.ncl" in
 let fragments = [
   { services = { webb = { image = "nginx:1.27" } } },  # typo: 'webb' not 'web'
 ] in
-composer.merge_with_check fragments
+composer.merge_fully_validate fragments "config.ncl"
 # => { ..., x-check = { ok = false, errors = [
 #      { service = "webb", field = "image", message = "..." }
 #    ]}}
 ```
 
-`scripts/to-compose.sh` exits 1 with `schema: errors found`.
-`podman compose config` (against the written `compose.yaml`)
-shows what would have happened at `up` time.
+`nickel-compose use` exits 0 (the render succeeded); the
+schema error is recorded in `x-check.ok = false`. `podman compose
+config` (against the written `compose.yaml`) shows what would
+have happened at `up` time.
 
 ## File-by-file
 
-| File | What changed in v0.2.0 |
+| File | What changed in v0.3.0 |
 |---|---|
-| `nickel-compose.ncl` | Added `Service`/`Port`/`Volume`/`Network`/`Fragment` contracts, `check` function, `merge_with_check` function. Bumped version to 0.2.0. |
-| `scripts/check.sh` | New. Strict typecheck of engine and optional user config. |
-| `scripts/to-compose.sh` | Uses `merge_with_check` (via the wrapper-generated config.ncl), reads `x-check.ok` to set exit code, always produces artifacts, summary to stderr. |
-| `scripts/from-nickel-compose.sh` | Generates `config.ncl` ending in `composer.merge_with_check fragments`. |
-| `mise/tasks/check` | Now wraps `scripts/check.sh`. |
-| `tests/schema_spec.sh` | New. 44 tests for contracts, check, merge_with_check, wrapper integration. |
-| `examples/dummy-project/config_ncl.ncl` | Uses `merge_with_check` for schema validation. |
-| `examples/dummy-project/config_with_check.ncl` | New. Shows explicit `check` call pattern. |
+| `nickel-compose.ncl` | Renamed `merge_with_check` + `merge_with_source` to single `merge_fully_validate`. Removed the intermediate `merge_with_check` entry point; one validated merge, explicit source. Bumped version to 0.3.0. |
+| `bin/nickel-compose-use.sh` | Absorbed `scripts/to-compose.sh`. Pure render — runs the merge with `merge_fully_validate`, writes `compose.ncl` + `compose.yaml`, exits 0 on success. No exit-code mapping for schema errors; `x-check.ok` is recorded in the artifact for tooling. |
+| `tests/schema_spec.sh` | Updated for the new function name and signature. Renamed the `to-compose.sh integration` describe block to `use verb integration`; the "schema failure exits 1" test now confirms `use` exits 0 but `x-check.ok = false` in the artifact. |

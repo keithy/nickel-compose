@@ -6,8 +6,8 @@
 # want to do additional processing on the merged record between
 # merge and check.
 #
-# In production use `composer.merge_with_check` (see config_ncl.ncl)
-# so the result carries the x-check field for tooling.
+# In production use `composer.merge_fully_validate` (see config_ncl.ncl)
+# so the result carries the x-check and x-source fields for tooling.
 
 let composer = import "nickel-compose.ncl" in
 
@@ -20,7 +20,7 @@ let fragments = [
 
 let merged = composer.merge fragments in
 
-# schema report — same shape as merge_with_check produces
+# schema report — same shape merge_fully_validate produces
 let report = composer.check merged in
 
 # surface schema state to callers / tooling

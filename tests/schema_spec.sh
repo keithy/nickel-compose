@@ -6,10 +6,10 @@
 #   - composer.Service contract exposes field-level doc/default
 #   - composer.validation.check (and alias composer.check) returns
 #     { ok, errors } for valid and invalid records
-#   - composer.merge_with_check attaches x-check to the result
+#   - composer.merge_fully_validate attaches x-check + x-source to the result
 #   - x-check is a Compose extension field (prefix x-*) so it
 #     stays in the rendered YAML; podman-compose ignores it
-#   - the to-compose.sh wrapper reads x-check.ok to set the exit
+#   - the use verb records x-check + x-source on the rendered artifact
 #     code (3 cases: true, false, absent)
 #   - exit code on schema error is 1, but artifacts are still
 #     produced (so podman compose config can debug)
@@ -22,7 +22,7 @@ cd "$(dirname "$0")"
 
 ROOT="$(cd .. && pwd)"
 NC="$ROOT/nickel-compose.ncl"
-TO_WRAPPER="$ROOT/scripts/to-compose.sh"
+TO_USE="$ROOT/bin/nickel-compose-use.sh"
 
 rm -rf out
 mkdir -p out
@@ -156,17 +156,17 @@ EOF
   }
 }
 
-describe "composer.merge_with_check" && {
+describe "composer.merge_fully_validate" && {
   it "attaches x-check to the result, visible to nickel eval" && {
     cat > "out/with-check.ncl" <<EOF
 let composer = import "$NC" in
 {
-  result = composer.merge_with_check [
+  result = composer.merge_fully_validate [
     { services = { web = { image = "nginx:1.27" } } },
-  ],
-  has_check = std.record.has_field "x-check" (composer.merge_with_check [
+  ] "test.ncl",
+  has_check = std.record.has_field "x-check" (composer.merge_fully_validate [
     { services = { web = { image = "nginx:1.27" } } },
-  ]),
+  ] "test.ncl"),
 }
 EOF
     run nickel eval "out/with-check.ncl" > "out/with-check.eval" 2>&1 || true
@@ -179,9 +179,9 @@ EOF
   it "the attached x-check has ok and errors fields" && {
     cat > "out/check-shape.ncl" <<EOF
 let composer = import "$NC" in
-let m = composer.merge_with_check [
+let m = composer.merge_fully_validate [
   { services = { web = { image = "x" } } },
-] in
+] "test.ncl" in
 {
   has_ok = std.record.has_field "ok" m."x-check",
   has_errors = std.record.has_field "errors" m."x-check",
@@ -204,9 +204,9 @@ EOF
     # schema report can parse the YAML.
     cat > "out/with-check-json.ncl" <<EOF
 let composer = import "$NC" in
-composer.merge_with_check [
+composer.merge_fully_validate [
   { services = { web = { image = "nginx:1.27" } } },
-]
+] "test.ncl"
 EOF
     run nickel export --format json "out/with-check-json.ncl" > "out/with-check.json"
     should_succeed
@@ -215,25 +215,25 @@ EOF
   }
 }
 
-describe "to-compose.sh integration" && {
-  it "produces compose.ncl + compose.yaml, exits 0, schema ok" && {
-    # Bare fragment list (the post-refactor shape). to-compose.sh
-    # wraps this with the engine and calls merge_with_source.
+describe "use verb integration" && {
+  it "produces compose.ncl + compose.yaml, exits 0 on successful render" && {
+    # Bare fragment list (the post-refactor shape). The use verb
+    # wraps this with the engine and calls merge_fully_validate.
     cat > "out/good-config.ncl" <<'EOF'
 [
   { services = { web = { image = "nginx:1.27" } } },
 ]
 EOF
-    run "$TO_WRAPPER" --in "out/good-config.ncl" --out "out/good.yaml" 2>"out/good.stderr"
+    run "$TO_USE" "out/good-config.ncl" --out "out/good.yaml" 2>"out/good.stderr"
     should_succeed
     expect "out/good.ncl" to_exist
     expect "out/good.yaml" to_exist
-    # The schema summary lands on stderr.
-    grep -q "schema: ok" "out/good.stderr"
-    should_succeed
     # The yaml has x-check (it's a Compose extension field;
     # the runtime ignores it but it's preserved for tooling).
     grep -q "^x-check:" "out/good.yaml"
+    should_succeed
+    # x-check.ok is true on a clean schema.
+    grep -q "^  ok: true" "out/good.yaml"
     should_succeed
     # podman-compose accepts the yaml.
     if command -v podman-compose >/dev/null 2>&1; then
@@ -242,47 +242,28 @@ EOF
     fi
   }
 
-  it "exits non-zero on schema failure but still produces artifacts" && {
-    # Bare fragment list with a fragment that has a service
-    # missing both image and build — schema check fails.
+  it "exits 0 even on schema failure, but x-check.ok is false in the artifact" && {
+    # use is a pure render — schema errors are recorded in x-check
+    # but don't fail the render. To enforce the schema, inspect
+    # compose.ncl.x-check directly or run a separate validator.
     cat > "out/bad-config.ncl" <<'EOF'
 [
   { services = { web = { command = ["echo"] } } },
 ]
 EOF
-    run "$TO_WRAPPER" --in "out/bad-config.ncl" --out "out/bad.yaml" 2>"out/bad.stderr"
-    should_fail
-    # The artifacts still exist (so `podman compose config`
-    # can debug the broken state).
+    run "$TO_USE" "out/bad-config.ncl" --out "out/bad.yaml" 2>"out/bad.stderr"
+    should_succeed
+    # The artifacts exist (the render succeeded; schema is
+    # recorded, not enforced).
     expect "out/bad.ncl" to_exist
     expect "out/bad.yaml" to_exist
-    # The schema summary lands on stderr.
-    grep -q "schema: errors" "out/bad.stderr"
+    # The .yaml has x-check.ok = false (schema failure recorded).
+    grep -q "^  ok: false" "out/bad.yaml"
     should_succeed
-    # The .ncl has the x-check field with the error.
-    grep -q "x-check" "out/bad.ncl"
+    # The errors are listed in x-check.errors.
+    grep -q "^x-check:" "out/bad.yaml"
     should_succeed
-  }
-
-  it "plain 'merge' is treated as schema-not-checked (backward compat)" && {
-    # Bare fragment list. The wrapper calls merge_with_source
-    # which always attaches x-check, so this test now expects
-    # the schema to be checked. The "not checked" path only
-    # fires when no merge_with_check / merge_with_source is
-    # in the call chain — i.e. when the user calls merge
-    # directly and returns the result without going through
-    # to-compose.sh. That path is exercised by the
-    # config_with_check.ncl typecheck, not here.
-    cat > "out/legacy-config.ncl" <<'EOF'
-[
-  { services = { web = { image = "nginx:1.27" } } },
-]
-EOF
-    run "$TO_WRAPPER" --in "out/legacy-config.ncl" --out "out/legacy.yaml" 2>"out/legacy.stderr"
-    should_succeed
-    # Schema is now checked (via merge_with_source) — confirm
-    # the "schema: ok" line, not "schema: not checked".
-    grep -q "schema: ok" "out/legacy.stderr"
+    grep -q "errors:" "out/bad.yaml"
     should_succeed
   }
 }
