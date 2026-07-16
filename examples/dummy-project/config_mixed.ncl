@@ -9,13 +9,9 @@
 # Leave the rarely-edited ones (base, dev) on YAML until you
 # need to touch them.
 
-let composer = import "nickel-compose.ncl" in
-
-let fragments = [
+[
   import "./base.yml",
   import "./services/web.ncl",
   import "./services/db.yml",
   import "./overlays/dev.yml",
-] in
-
-composer.merge_with_check fragments
+]

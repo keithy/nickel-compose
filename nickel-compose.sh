@@ -40,6 +40,7 @@ TO_COMPOSE="$NC_ROOT/scripts/to-compose.sh"
 CHECK_SH="$NC_ROOT/scripts/check.sh"
 FROM_WRAPPER="$NC_ROOT/scripts/from-nickel-compose.sh"
 FIND_FRAGMENTS="$NC_ROOT/scripts/find-fragments.sh"
+NC_RUN="$NC_ROOT/scripts/nickel-compose-run.sh"
 ENGINE="$NC_ROOT/nickel-compose.ncl"
 
 usage() {
@@ -95,7 +96,7 @@ verb_report() {
   # Special field `source` returns the path of the config
   # that produced the merged record (read from x-source on
   # compose.ncl, set by the engine when called via
-  # merge_with_check).
+  # merge_with_check / merge_with_source).
   if [[ $# -lt 1 ]]; then
     echo "usage: nickel-compose.sh report <field> [<compose.ncl>]" >&2
     exit 1
@@ -106,26 +107,16 @@ verb_report() {
     echo "no such file: $ncl (run 'use' first to render)" >&2
     exit 1
   fi
-  # Write the eval helper to a temp file. The source field
-  # is a top-level x-* extension on the merged record; the
-  # engine always sets it (to "./config.ncl" by default,
-  # or to an explicit path via merge_with_source).
-  local helper
-  helper="$(mktemp /tmp/nc-report-XXXXXX.ncl)"
-  local ncl_abs
-  ncl_abs="$(cd "$(dirname "$ncl")" && pwd)/$(basename "$ncl")"
-  cat > "$helper" <<EOF
-let composer = import "$ENGINE" in
-let m = (import "$ncl_abs") in
-if "$field" == "source" then
-  m."x-source"
-else
-  composer.report."$field" m
-EOF
-  local rc=0
-  nickel eval "$helper" || rc=$?
-  rm -f "$helper"
-  return "$rc"
+  # Delegate to nickel-compose-run. The `config` name is
+  # arbitrary — it just needs to match the expression.
+  # compose is pre-loaded by nickel-compose-run.
+  local expr
+  if [[ "$field" == "source" ]]; then
+    expr='config."x-source"'
+  else
+    expr="compose.report.\"$field\" config"
+  fi
+  "$NC_RUN" config="$ncl" -- "$expr"
 }
 
 verb_schema() {

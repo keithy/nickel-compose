@@ -178,6 +178,7 @@ the engine enforces), use a real field with a contract.
 {
   merge,                  # plain merge
   merge_with_check,       # merge + x-check attached
+  merge_with_source,      # merge_with_check + x-source attached
   Service, Port, Volume, Network, Fragment,
   check,                  # alias for validation.check
   validation = { check },
@@ -190,6 +191,65 @@ the engine enforces), use a real field with a contract.
 Add new namespaces by extending the public record. Don't
 add them as top-level let-bindings.
 
+## `config.ncl` shape (the user contract)
+
+A `config.ncl` is a **bare list** of fragment imports. It does
+NOT import the engine and does NOT call merge. The `use` script
+wraps the list with the engine at eval time:
+
+```nickel
+[
+  import "./base.yml",
+  import "./services/web.yml",
+  import "./overlays/dev.yml",
+]
+```
+
+The engine is auto-loaded by `nickel-compose-run.sh`, which is
+called by `to-compose.sh`. The engine's parent dir is added to
+`NICKEL_IMPORT_PATH` automatically — users don't need to set
+it.
+
+If you find yourself writing `let composer = ...` in a
+`config.ncl`, stop. The `use` flow assumes bare-list shape.
+For advanced cases (custom processing between merge and
+check), call the engine functions directly via
+`nickel-compose-run` (see below) or use the
+`config_with_check.ncl` example in `examples/dummy-project/`
+as a template — that file is the documented exception.
+
+## Tools (load this before editing scripts/)
+
+The dispatcher is `nickel-compose.sh` (flat-arg CLI). The
+implementation is two layers:
+
+- **`scripts/nickel-run.sh`** — pure, generic. Takes
+  `NAME=PATH... -- EXPRESSION`, builds a temp wrapper that
+  imports each input, evaluates the expression with each `NAME`
+  bound as a free identifier and a `paths` record in scope for
+  the source path. Does NOT touch `NICKEL_IMPORT_PATH`.
+  Reusable outside this project.
+- **`scripts/nickel-compose-run.sh`** — thin convenience
+  layer over `nickel-run.sh`. Pre-binds the engine as
+  `compose` (free identifier, no `run.` prefix) and sets
+  `NICKEL_IMPORT_PATH` to the engine's parent dir. This is
+  what `to-compose.sh` and `nickel-compose.sh report` call.
+- **`scripts/to-compose.sh`** — `use`'s implementation. Calls
+  `nickel-compose-run` to produce `compose.ncl`, then derives
+  `compose.yaml` via `nickel export` and reads `x-check.ok` for
+  the exit code.
+
+In a `nickel-run` expression, each `NAME=PATH` shows up as a
+free identifier — `cfg.services.web.image`, not
+`run.cfg.services.web.image`. The `_paths` record still
+provides the path string: `_paths.cfg` → absolute path. The
+underscore prefix marks it as a tool-injected binding; this
+lets you name a user input `paths` (or anything else) without
+collision with the wrapper's record.
+
+If you're adding a new verb to `nickel-compose.sh`, write it
+on top of `nickel-run` (or `nickel-compose-run` for engine-
+specific work). Don't reinvent the wrapper machinery.
 
 ## Style
 

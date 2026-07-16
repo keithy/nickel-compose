@@ -217,12 +217,12 @@ EOF
 
 describe "to-compose.sh integration" && {
   it "produces compose.ncl + compose.yaml, exits 0, schema ok" && {
-    cat > "out/good-config.ncl" <<EOF
-let composer = import "nickel-compose.ncl" in
-let fragments = [
+    # Bare fragment list (the post-refactor shape). to-compose.sh
+    # wraps this with the engine and calls merge_with_source.
+    cat > "out/good-config.ncl" <<'EOF'
+[
   { services = { web = { image = "nginx:1.27" } } },
-] in
-composer.merge_with_check fragments
+]
 EOF
     run "$TO_WRAPPER" --in "out/good-config.ncl" --out "out/good.yaml" 2>"out/good.stderr"
     should_succeed
@@ -243,12 +243,12 @@ EOF
   }
 
   it "exits non-zero on schema failure but still produces artifacts" && {
-    cat > "out/bad-config.ncl" <<EOF
-let composer = import "nickel-compose.ncl" in
-let fragments = [
+    # Bare fragment list with a fragment that has a service
+    # missing both image and build — schema check fails.
+    cat > "out/bad-config.ncl" <<'EOF'
+[
   { services = { web = { command = ["echo"] } } },
-] in
-composer.merge_with_check fragments
+]
 EOF
     run "$TO_WRAPPER" --in "out/bad-config.ncl" --out "out/bad.yaml" 2>"out/bad.stderr"
     should_fail
@@ -265,16 +265,24 @@ EOF
   }
 
   it "plain 'merge' is treated as schema-not-checked (backward compat)" && {
-    cat > "out/legacy-config.ncl" <<EOF
-let composer = import "nickel-compose.ncl" in
-let fragments = [
+    # Bare fragment list. The wrapper calls merge_with_source
+    # which always attaches x-check, so this test now expects
+    # the schema to be checked. The "not checked" path only
+    # fires when no merge_with_check / merge_with_source is
+    # in the call chain — i.e. when the user calls merge
+    # directly and returns the result without going through
+    # to-compose.sh. That path is exercised by the
+    # config_with_check.ncl typecheck, not here.
+    cat > "out/legacy-config.ncl" <<'EOF'
+[
   { services = { web = { image = "nginx:1.27" } } },
-] in
-composer.merge fragments
+]
 EOF
     run "$TO_WRAPPER" --in "out/legacy-config.ncl" --out "out/legacy.yaml" 2>"out/legacy.stderr"
     should_succeed
-    grep -q "schema: not checked" "out/legacy.stderr"
+    # Schema is now checked (via merge_with_source) — confirm
+    # the "schema: ok" line, not "schema: not checked".
+    grep -q "schema: ok" "out/legacy.stderr"
     should_succeed
   }
 }

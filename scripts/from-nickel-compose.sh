@@ -11,9 +11,16 @@
 #   NICKEL_COMPOSE='web.yml:$COMPOSE_OVERLAYS:db.yml'
 #
 # This script writes config.ncl at the project root (or wherever
-# --out points) — a Nickel file that imports each fragment and
-# returns the result of composer.merge. To render that into
-# compose.ncl and compose.yaml, run scripts/to-compose.sh.
+# --out points) — a Nickel file containing a bare list of imports:
+#
+#   [
+#     import "./base.yml",
+#     import "./services/web.yml",
+#   ]
+#
+# To render that into compose.ncl and compose.yaml, run
+# scripts/to-compose.sh. The bare-list shape is what `use` expects;
+# no engine import or merge call is needed in the config.
 #
 # Usage:
 #   NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
@@ -108,23 +115,18 @@ for path in "${fragment_paths[@]}"; do
   fi
 done
 
-# Write the config.ncl. Each fragment becomes a literal import;
-# the engine is imported by filename (no path) — to-compose.sh
-# sets NICKEL_IMPORT_PATH so the engine can be found regardless
-# of where config.ncl lives.
+# Write the config.ncl as a bare fragment list. The use script
+# wraps this with the engine and calls composer.merge_with_source
+# at eval time. No engine import or merge call is needed here.
 {
-  echo "let composer = import \"nickel-compose.ncl\" in"
-  echo ""
-  echo "let fragments = ["
+  echo "["
   for path in "${fragment_paths[@]}"; do
     [[ -z "$path" ]] && continue
     abs="$path"
     [[ "$abs" != /* ]] && abs="$CWD/$abs"
     echo "  import \"$abs\","
   done
-  echo "] in"
-  echo ""
-  echo "composer.merge_with_check fragments"
+  echo "]"
 } > "$OUT"
 
 echo "wrote: $OUT (from NICKEL_COMPOSE: $nickel_compose)"

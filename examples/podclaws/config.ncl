@@ -2,25 +2,22 @@
 #
 # Example: podclaws deployment using nickel-compose.
 #
-# Imports YAML fragments from the podclaws repo, merges them with
-# Compose semantics, and exports a single compose.yml.
+# Bare fragment list. The use script (or nickel export) wraps this
+# with the engine and calls composer.merge_with_source.
+#
+# Selection happens here. Comment out a line to skip. Order
+# matters: later fragments override scalars and concat arrays.
 #
 # Usage:
-#   nickel export --format yaml examples/podclaws/config.ncl > compose.yml
-#   podman-compose -f compose.yml config
+#   nickel-compose.sh use config.ncl
+#   podman-compose -f compose.yaml config
 #
 # Tested with nickel 1.17.0 + podman-compose 1.6.0.
 
-let composer = import "nickel-compose.ncl" in
-
-# Fragments — selection happens here. Comment out a line to skip.
-# Order matters: later fragments override scalars and concat arrays.
-let fragments = [
+[
   import "/code/podclaws/compose.yml",
   import "/code/podclaws/use/goclaw/service.goclaw.yml",
   import "/code/podclaws/use/goclaw/+code.yml",
   import "/code/podclaws/use/goclaw/+self-improve.yml",
   import "/code/podclaws/podman/+network-fix.yml",
-] in
-
-composer.merge fragments
+]

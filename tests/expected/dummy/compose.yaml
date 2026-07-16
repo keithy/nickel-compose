@@ -46,4 +46,4 @@ volumes:
 x-check:
   errors: []
   ok: true
-x-source: ./config.ncl
+x-source: /code/podclaws/nickel-compose/examples/dummy-project/config.ncl

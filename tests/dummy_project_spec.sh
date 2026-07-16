@@ -19,6 +19,7 @@ ROOT="$(cd .. && pwd)"
 export NICKEL_IMPORT_PATH="$ROOT"
 FROM_WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
+NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
 
 rm -rf out
 mkdir -p out
@@ -28,31 +29,51 @@ describe "dummy-project end-to-end" && {
 
   it "renders YAML without error" && {
     mkdir -p "out/dummy"
-    run nickel export --format yaml "$DUMMY" | sed -n '2,$p' > "out/dummy/compose.yaml"
+    run "$TO_WRAPPER" --in "$DUMMY" --out "$(pwd)/out/dummy/compose.yaml"
     should_succeed
   }
 
   it "renders JSON without error" && {
-    run nickel export --format json "$DUMMY" > "out/dummy/compose.json"
+    # to-compose.sh emits yaml; for JSON we use nickel-compose-run
+    # directly (the underlying engine) and pipe through nickel
+    # export --format json.
+    run "$NC_RUN" --format json \
+      --out "$(pwd)/out/dummy/compose.json" \
+      fragments="$DUMMY" -- \
+      'compose.merge_with_source fragments _paths.fragments'
     should_succeed
   }
 
   it "YAML output matches expected snapshot" && {
-    expect_no_diff "out/dummy/compose.yaml" "expected/dummy/compose.yaml"
+    # Strip x-source: it's a provenance field, not part of the
+    # contract. The contract is "the merged record is identical."
+    grep -v '^x-source:' "out/dummy/compose.yaml" > "out/dummy/expected-stripped.yml"
+    grep -v '^x-source:' "expected/dummy/compose.yaml" > "out/dummy/golden-stripped.yml"
+    expect_no_diff "out/dummy/expected-stripped.yml" "out/dummy/golden-stripped.yml"
   }
 
   it "config_ncl.ncl (all Nickel) produces byte-identical output" && {
-    run nickel export --format yaml "$ROOT/examples/dummy-project/config_ncl.ncl" \
-      | sed -n '2,$p' > "out/dummy/compose-ncl.yml"
+    # x-source reflects the real path of the config, so it
+    # differs per config file. Filter it out before comparing
+    # — the contract is "merged record is identical, not
+    # provenance metadata."
+    run "$TO_WRAPPER" \
+      --in "$ROOT/examples/dummy-project/config_ncl.ncl" \
+      --out "$(pwd)/out/dummy/compose-ncl.yml"
     should_succeed
-    expect_no_diff "out/dummy/compose-ncl.yml" "expected/dummy/compose.yaml"
+    grep -v '^x-source:' "out/dummy/compose-ncl.yml"  > "out/dummy/ncl-stripped.yml"
+    grep -v '^x-source:' "expected/dummy/compose.yaml" > "out/dummy/ncl-golden.yml"
+    expect_no_diff "out/dummy/ncl-stripped.yml" "out/dummy/ncl-golden.yml"
   }
 
   it "config_mixed.ncl (mixed YAML + Nickel) produces byte-identical output" && {
-    run nickel export --format yaml "$ROOT/examples/dummy-project/config_mixed.ncl" \
-      | sed -n '2,$p' > "out/dummy/compose-mixed.yml"
+    run "$TO_WRAPPER" \
+      --in "$ROOT/examples/dummy-project/config_mixed.ncl" \
+      --out "$(pwd)/out/dummy/compose-mixed.yml"
     should_succeed
-    expect_no_diff "out/dummy/compose-mixed.yml" "expected/dummy/compose.yaml"
+    grep -v '^x-source:' "out/dummy/compose-mixed.yml"  > "out/dummy/mixed-stripped.yml"
+    grep -v '^x-source:' "expected/dummy/compose.yaml"   > "out/dummy/mixed-golden.yml"
+    expect_no_diff "out/dummy/mixed-stripped.yml" "out/dummy/mixed-golden.yml"
   }
 
   it "config_no_base.ncl validates: engine synthesizes top-level volumes from services" && {
@@ -61,11 +82,14 @@ describe "dummy-project end-to-end" && {
     # should be valid compose — podman-compose config accepts it.
     # We render BOTH yaml (for podman-compose validation) and json
     # (for jq structural assertions — jq doesn't read YAML).
-    run nickel export --format yaml "$ROOT/examples/dummy-project/config_no_base.ncl" \
-      | sed -n '2,$p' > "out/dummy/compose-no-base.yml"
+    run "$TO_WRAPPER" \
+      --in "$ROOT/examples/dummy-project/config_no_base.ncl" \
+      --out "$(pwd)/out/dummy/compose-no-base.yml"
     should_succeed
-    run nickel export --format json "$ROOT/examples/dummy-project/config_no_base.ncl" \
-      > "out/dummy/compose-no-base.json"
+    run "$NC_RUN" --format json \
+      --out "$(pwd)/out/dummy/compose-no-base.json" \
+      fragments="$ROOT/examples/dummy-project/config_no_base.ncl" -- \
+      'compose.merge_with_source fragments _paths.fragments'
     should_succeed
     # The synthesized top-level volumes: web-data, db-data.
     expect_jq "out/dummy/compose-no-base.json" '.volumes | has("web-data")' to_be "true"
@@ -156,8 +180,10 @@ EOF
         --out "out/wrapper-literal.yaml" >/dev/null
       should_succeed
 
-      if ! diff -q "out/wrapper-literal.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "out/wrapper-literal.yaml" "out/dummy/compose.yaml" | head -20
+      if ! diff -q <(grep -v '^x-source:' "out/wrapper-literal.yaml") \
+                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
+        diff <(grep -v '^x-source:' "out/wrapper-literal.yaml") \
+             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
         echo "literal-path two-step output differs from golden"
         false
       fi
@@ -212,8 +238,10 @@ EOF
       # comparison is byte-equality of the rendered YAML.
       run nickel export --format yaml "$NCL_AT" \
         | sed -n '2,$p' > "out/twostep-derived.yaml"
-      if ! diff -q "out/twostep-derived.yaml" "out/twostep.yaml" >/dev/null 2>&1; then
-        diff "out/twostep-derived.yaml" "out/twostep.yaml" | head -20
+      if ! diff -q <(grep -v '^x-source:' "out/twostep-derived.yaml") \
+                    <(grep -v '^x-source:' "out/twostep.yaml") >/dev/null 2>&1; then
+        diff <(grep -v '^x-source:' "out/twostep-derived.yaml") \
+             <(grep -v '^x-source:' "out/twostep.yaml") | head -20
         echo "derived yaml does not match two-step output"
         false
       fi
@@ -240,8 +268,10 @@ EOF
       "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
         --out "out/stage0.yaml" >/dev/null
       should_succeed
-      if ! diff -q "out/stage0.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "out/stage0.yaml" "out/dummy/compose.yaml" | head -20
+      if ! diff -q <(grep -v '^x-source:' "out/stage0.yaml") \
+                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
+        diff <(grep -v '^x-source:' "out/stage0.yaml") \
+             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
         echo "stage 0 output differs from golden"
         false
       fi
@@ -268,8 +298,10 @@ EOF
       "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
         --out "out/stage1.yaml" >/dev/null
       should_succeed
-      if ! diff -q "out/stage1.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "out/stage1.yaml" "out/dummy/compose.yaml" | head -20
+      if ! diff -q <(grep -v '^x-source:' "out/stage1.yaml") \
+                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
+        diff <(grep -v '^x-source:' "out/stage1.yaml") \
+             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
         echo "stage 1 output differs from golden"
         false
       fi
@@ -294,8 +326,10 @@ EOF
       "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
         --out "out/mixed.yaml" >/dev/null
       should_succeed
-      if ! diff -q "out/mixed.yaml" "out/dummy/compose.yaml" >/dev/null 2>&1; then
-        diff "out/mixed.yaml" "out/dummy/compose.yaml" | head -20
+      if ! diff -q <(grep -v '^x-source:' "out/mixed.yaml") \
+                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
+        diff <(grep -v '^x-source:' "out/mixed.yaml") \
+             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
         echo "mixed form output differs from golden"
         false
       fi

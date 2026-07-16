@@ -18,12 +18,8 @@
 # network drivers, or other options that synthesis can't infer
 # (synthesized entries are always `null` body).
 
-let composer = import "nickel-compose.ncl" in
-
-let fragments = [
+[
   import "./services/web.ncl",
   import "./services/db.ncl",
   import "./overlays/dev.ncl",
-] in
-
-composer.merge_with_check fragments
+]
