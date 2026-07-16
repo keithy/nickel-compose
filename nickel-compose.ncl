@@ -512,7 +512,7 @@ let fragment_schema = {
 # in their `config.ncl`, and used internally by
 # `merge_with_check`.
 #
-# For v0.2.0 we enforce: every service declares `image` or
+# For v0.3.0 we enforce: every service declares `image` or
 # `build`. Port and depends_on validation is intentionally
 # left to later rounds (see TODO in docs/schema.md).
 let check_service = fun name svc =>
