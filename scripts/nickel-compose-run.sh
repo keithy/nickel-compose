@@ -19,12 +19,19 @@
 #   1. $CWD/nickel-compose/nickel-compose.ncl        (submodule)
 #   2. $CWD/nickel-compose.ncl                       (vendored)
 #   3. $SCRIPT_DIR/../nickel-compose.ncl             (script-adjacent)
-#   4. $NICKEL_COMPOSE_ENGINE                        (env override)
+#   4. $NICKEL_COMPOSE_ROOT/nickel-compose.ncl       (mise-installed)
+#   5. $NICKEL_COMPOSE_ENGINE                        (env override)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NICKEL_RUN="$SCRIPT_DIR/nickel-run.sh"
+# Prefer the script-adjacent nickel-run.sh; fall back to PATH
+# (so mise-installed users get the bin/ version).
+if [[ -x "$SCRIPT_DIR/nickel-run.sh" ]]; then
+  NICKEL_RUN="$SCRIPT_DIR/nickel-run.sh"
+else
+  NICKEL_RUN="nickel-run.sh"
+fi
 
 if [[ ! -x "$NICKEL_RUN" ]]; then
   echo "nickel-run.sh not found or not executable: $NICKEL_RUN" >&2
@@ -39,7 +46,8 @@ if [[ -z "$ENGINE" ]]; then
   for candidate in \
       "$CWD/nickel-compose/nickel-compose.ncl" \
       "$CWD/nickel-compose.ncl" \
-      "$SCRIPT_DIR/../nickel-compose.ncl"; do
+      "$SCRIPT_DIR/../nickel-compose.ncl" \
+      "${NICKEL_COMPOSE_ROOT:-}/nickel-compose.ncl"; do
     if [[ -f "$candidate" ]]; then
       ENGINE="$candidate"
       break
@@ -51,6 +59,7 @@ if [[ -z "$ENGINE" || ! -f "$ENGINE" ]]; then
   echo "  \$CWD/nickel-compose/nickel-compose.ncl" >&2
   echo "  \$CWD/nickel-compose.ncl" >&2
   echo "  \$SCRIPT_DIR/../nickel-compose.ncl" >&2
+  echo "  \$NICKEL_COMPOSE_ROOT/nickel-compose.ncl" >&2
   echo "use NICKEL_COMPOSE_ENGINE to override" >&2
   exit 1
 fi

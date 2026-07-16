@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# nickel-compose — dispatcher for nickel-compose operations.
+#
+# Convention: `nickel-compose <verb> <args>`. The dispatcher sets
+# NC_ROOT (the repo root, parent of this bin/ directory) and execs
+# bin/nickel-compose-<verb>.sh with the original arguments.
+#
+# Verb scripts live alongside this dispatcher as
+# bin/nickel-compose-<verb>.sh — they're discovered dynamically,
+# not listed here, so adding a new verb doesn't require editing
+# the dispatcher.
+#
+# Run `nickel-compose help` (or just `nickel-compose` with no args)
+# for the verb list. `help` resolves to bin/nickel-compose-help.sh.
+
+set -euo pipefail
+
+# The dispatcher lives at <repo>/bin/nickel-compose. The repo root
+# is one level up.
+SCRIPT_PATH="$(readlink -f "$0")"
+BIN_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+export NC_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+command="${1:-help}"
+shift 2>/dev/null || true
+
+exec "$BIN_DIR/nickel-compose-${command}.sh" "$@"

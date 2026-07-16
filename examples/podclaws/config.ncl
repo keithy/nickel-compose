@@ -9,7 +9,7 @@
 # matters: later fragments override scalars and concat arrays.
 #
 # Usage:
-#   nickel-compose.sh use config.ncl
+#   nickel-compose use config.ncl
 #   podman-compose -f compose.yaml config
 #
 # Tested with nickel 1.17.0 + podman-compose 1.6.0.

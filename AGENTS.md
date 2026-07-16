@@ -231,7 +231,9 @@ as a template — that file is the documented exception.
 
 ## Tools (load this before editing scripts/)
 
-The dispatcher is `nickel-compose.sh` (flat-arg CLI). The
+The dispatcher is `bin/nickel-compose`. It execs
+`bin/nickel-compose-<verb>.sh` for each verb; verbs are
+discovered dynamically by name (no hardcoded list). The
 implementation is two layers:
 
 - **`scripts/nickel-run.sh`** — pure, generic. Takes
@@ -244,7 +246,7 @@ implementation is two layers:
   layer over `nickel-run.sh`. Pre-binds the engine as
   `compose` (free identifier, no `run.` prefix) and sets
   `NICKEL_IMPORT_PATH` to the engine's parent dir. This is
-  what `to-compose.sh` and `nickel-compose.sh report` call.
+  what `to-compose.sh` and `bin/nickel-compose-report.sh` call.
 - **`scripts/to-compose.sh`** — `use`'s implementation. Calls
   `nickel-compose-run` to produce `compose.ncl`, then derives
   `compose.yaml` via `nickel export` and reads `x-check.ok` for
@@ -267,7 +269,8 @@ underscore prefix marks it as a tool-injected binding; this
 lets you name a user input `paths` (or anything else) without
 collision with the wrapper's record.
 
-If you're adding a new verb to `nickel-compose.sh`, write it
+If you're adding a new verb, add a `bin/nickel-compose-<verb>.sh`
+script and the dispatcher will pick it up automatically. Write it
 on top of `nickel-run` (or `nickel-compose-run` for engine-
 specific work). Don't reinvent the wrapper machinery.
 

@@ -11,15 +11,25 @@
 #
 # The engine lives next to this script (in the nickel-compose
 # checkout). For a vendored engine elsewhere, set
-# NICKEL_COMPOSE_ENGINE to the .ncl path.
+# NICKEL_COMPOSE_ENGINE to the .ncl path. For a mise-installed
+# engine, set NICKEL_COMPOSE_ROOT to the install root.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENGINE="${NICKEL_COMPOSE_ENGINE:-}"
 if [[ -z "$ENGINE" ]]; then
-  # Default: engine is at <repo>/nickel-compose.ncl
-  ENGINE="$SCRIPT_DIR/../nickel-compose.ncl"
+  # Search order: script-adjacent (dev checkout) → NICKEL_COMPOSE_ROOT
+  # (mise-installed) → fallback to script-adjacent (which will error
+  # below if the file isn't there).
+  for candidate in \
+      "$SCRIPT_DIR/../nickel-compose.ncl" \
+      "${NICKEL_COMPOSE_ROOT:-}/nickel-compose.ncl"; do
+    if [[ -f "$candidate" ]]; then
+      ENGINE="$candidate"
+      break
+    fi
+  done
 fi
 ENGINE="$(cd "$(dirname "$ENGINE")" && pwd)/$(basename "$ENGINE")"
 

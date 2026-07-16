@@ -13,11 +13,11 @@
 # On cd into this project, regenerate compose.yaml from the active
 # config.ncl. NICKEL_COMPOSE points at the config; bare `use`
 # resolves to it when no explicit arg is given.
-cd = "../../nickel-compose.sh use"
+cd = "../../bin/nickel-compose use"
 
 [env]
 # NICKEL_COMPOSE points at the active config.ncl. Bare
-# `nickel-compose.sh use` resolves to this path when no explicit
+# `nickel-compose use` resolves to this path when no explicit
 # argument is given. An explicit `use config.ncl` always wins.
 NICKEL_COMPOSE = "./config.ncl"
 

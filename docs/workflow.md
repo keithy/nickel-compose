@@ -6,7 +6,7 @@ A deployment in nickel-compose is one `config.ncl` file that
 renders to one `compose.yaml`. The flow is:
 
 ```
-config.ncl   ──[nickel-compose.sh use]──>   compose.yaml   ──[podman compose]──>   containers
+config.ncl   ──[nickel-compose use]──>   compose.yaml   ──[podman compose]──>   containers
 ```
 
 `compose.yaml` is the merged record — auto-picked by
@@ -16,7 +16,7 @@ flag is needed.
 To create a new deployment:
 
 1. Generate `config.ncl` (with `dc2nc.sh`, or write it by hand).
-2. Run `nickel-compose.sh use`.
+2. Run `nickel-compose use`.
 3. Run `podman-compose up -d`.
 
 That's the core. Everything else is migration tooling to get
@@ -25,7 +25,7 @@ existing projects to this point without forcing a big-bang rewrite.
 ## The `config.ncl` file
 
 The user's `config.ncl` is a bare list of fragment imports. The
-dispatcher (`nickel-compose.sh use`) wraps it with the merge
+dispatcher (`nickel-compose use`) wraps it with the merge
 engine and calls `composer.merge_with_source` at eval time — no
 engine import or merge call needed in the file itself:
 
@@ -84,7 +84,7 @@ matches by relative path, so `agent/base.yml` and
 ## NICKEL_COMPOSE: the default config path
 
 `NICKEL_COMPOSE` is a single env var pointing at a `config.ncl`.
-When mise/direnv/CD-hook sets it, bare `nickel-compose.sh use`
+When mise/direnv/CD-hook sets it, bare `nickel-compose use`
 resolves to that config without any args:
 
 ```toml
@@ -93,7 +93,7 @@ resolves to that config without any args:
 NICKEL_COMPOSE = "./config.ncl"
 
 [hooks]
-postcd = "nickel-compose.sh use"
+postcd = "nickel-compose use"
 ```
 
 An explicit `use config.ncl` always wins over `$NICKEL_COMPOSE`,
@@ -126,7 +126,7 @@ find . \( -name '*.yml' -o -name '*.ncl' \) \
   > config.ncl
 ```
 
-`NICKEL_COMPOSE` points at `config.ncl`; bare `nickel-compose.sh
+`NICKEL_COMPOSE` points at `config.ncl`; bare `nickel-compose
 use` renders it. The dispatcher doesn't read `COMPOSE_FILE` — the
 shape is "config.ncl is the source of truth" from day one.
 
@@ -258,7 +258,7 @@ lands.
   Typecheck catches typos before any container starts.
 - **Stage 3** is optional. Most projects stay at Stage 2.
 
-The end state is "edit `config.ncl`, run `nickel-compose.sh use`,
+The end state is "edit `config.ncl`, run `nickel-compose use`,
 run `podman-compose up`." No env-var indirection in the
 dispatcher, no bash wrapper, no root fragment required.
 

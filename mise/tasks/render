@@ -2,10 +2,10 @@
 #MISE description="Render config.ncl to compose.yaml (use with -- config=path out=path)"
 #MISE raw=true
 
-# Find nickel-compose.sh relative to this task file.
+# Find nickel-compose dispatcher relative to this task file.
 TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$TASK_DIR/../.." && pwd)"
-NC_SH="$ROOT/nickel-compose.sh"
+NC_SH="$ROOT/bin/nickel-compose"
 
 # Default config: ./config.ncl if present, else the bundled example.
 if [[ -z "${config:-}" ]]; then
@@ -16,7 +16,7 @@ if [[ -z "${config:-}" ]]; then
   fi
 fi
 
-# Forward --out as a flag to nickel-compose.sh use.
+# Forward --out as a flag to nickel-compose use.
 if [[ -n "${out:-}" ]]; then
   "$NC_SH" use "$config" --out "$out"
 else

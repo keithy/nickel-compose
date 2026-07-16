@@ -78,7 +78,14 @@ case "$OUT" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NICKEL_COMPOSE_RUN="$SCRIPT_DIR/nickel-compose-run.sh"
+# Prefer the script-adjacent copy; fall back to PATH for mise-
+# installed users where to-compose.sh lives in bin/ alongside
+# nickel-compose-run.sh.
+if [[ -x "$SCRIPT_DIR/nickel-compose-run.sh" ]]; then
+  NICKEL_COMPOSE_RUN="$SCRIPT_DIR/nickel-compose-run.sh"
+else
+  NICKEL_COMPOSE_RUN="nickel-compose-run.sh"
+fi
 
 if [[ ! -x "$NICKEL_COMPOSE_RUN" ]]; then
   echo "nickel-compose-run.sh not found or not executable: $NICKEL_COMPOSE_RUN" >&2

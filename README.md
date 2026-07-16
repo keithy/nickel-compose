@@ -28,7 +28,7 @@ project:
   `docker compose` auto-pick — no `-f` flag needed at deploy time
 
 `NICKEL_COMPOSE` (optional path to the active config.ncl) is set
-by mise/CD-hook so that bare `nickel-compose.sh use` resolves to
+by mise/CD-hook so that bare `nickel-compose use` resolves to
 the right config. Explicit `use config.ncl` always wins.
 Nickel-compose follows the convention `.yml` for input fragments
 and `.yaml` for the rendered whole.
@@ -56,7 +56,7 @@ mise run render -- config=path out=path   # render a custom config
 Or directly:
 
 ```bash
-./nickel-compose.sh use examples/podclaws/config.ncl --out compose.yaml
+./nickel-compose use examples/podclaws/config.ncl --out compose.yaml
 nickel export --format yaml examples/podclaws/config.ncl > compose.yaml
 ```
 
@@ -279,9 +279,17 @@ nickel-compose/
 │   ├── config.toml             # tools (nickel, jq) + task config
 │   └── tasks/
 │       ├── check               # typecheck the engine and user config
-│       ├── render              # render config to compose.yml
+│       ├── render              # render config to compose.yaml
 │       └── test                # run the bash-spec test suite
-├── nickel-compose.sh            # dispatcher: use, check, fragments, report, schema
+├── bin/
+│   ├── nickel-compose           # dispatcher (execs bin/nickel-compose-<verb>.sh)
+│   ├── nickel-compose-use.sh    # render config to compose.yaml
+│   ├── nickel-compose-check.sh  # typecheck
+│   ├── nickel-compose-fragments.sh  # discover fragments
+│   ├── nickel-compose-report.sh # query the merged record
+│   ├── nickel-compose-schema.sh # show a contract's fields
+│   └── nickel-compose-help.sh   # this message
+├── nickel-compose.ncl          # merge engine (single file, drop-in)
 ├── README.md
 ├── LICENSE
 └── .gitignore

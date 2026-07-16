@@ -2,7 +2,7 @@
 
 A self-contained example showing how to add nickel-compose to an
 existing podman/docker-compose project. Compose fragments live here;
-the dispatcher at the nickel-compose repo root (`../../nickel-compose.sh`)
+the dispatcher at the nickel-compose repo root (`../../bin/nickel-compose`)
 drives the merge.
 
 ## What's here
@@ -28,7 +28,7 @@ dummy-project/
     └── config.toml          # tools + cd hook + task includes
 ```
 
-The dispatcher `nickel-compose.sh` and the fragment picker `dc2nc.sh`
+The dispatcher `nickel-compose` and the fragment picker `dc2nc.sh`
 live at the nickel-compose repo root (`../../`).
 
 The root fragment is named `base.yml`, not `compose.yaml`, because
@@ -51,7 +51,7 @@ fragments/*.yml  --[dc2nc.sh]-->  config.ncl  --[use]-->  compose.yaml  --[podma
 ```
 
 1. **Pick your fragments** with `dc2nc.sh` (or write `config.ncl` by hand).
-2. **Render** with `nickel-compose.sh use [config.ncl]` — defaults to
+2. **Render** with `nickel-compose use [config.ncl]` — defaults to
    `$NICKEL_COMPOSE` if set, else `./config.ncl`.
 3. **Deploy** with `podman compose up` — it auto-picks `compose.yaml`.
 
@@ -82,7 +82,7 @@ find . \( -name '*.yml' -o -name '*.ncl' \) \
   > config.ncl
 
 # Then render and validate
-../../nickel-compose.sh use
+../../bin/nickel-compose use
 podman-compose config
 ```
 
@@ -120,7 +120,7 @@ unambiguously distinct.
 ## NICKEL_COMPOSE: the default config path
 
 `NICKEL_COMPOSE` is a single env var pointing at a `config.ncl`.
-If your mise/direnv/CD-hook sets it, bare `nickel-compose.sh use`
+If your mise/direnv/CD-hook sets it, bare `nickel-compose use`
 renders that config without any args:
 
 ```bash
@@ -129,7 +129,7 @@ renders that config without any args:
 NICKEL_COMPOSE = "./config.ncl"
 
 [hooks]
-postcd = "nickel-compose.sh use"
+postcd = "nickel-compose use"
 ```
 
 An explicit `use config.ncl` always wins over `$NICKEL_COMPOSE`,
@@ -160,7 +160,7 @@ The render produces `compose.yaml`. Look at it:
 3. Add the postcd hook to your `mise.toml`:
    ```toml
    [hooks]
-   postcd = "nickel-compose/nickel-compose.sh use"
+   postcd = "nickel-compose/bin/nickel-compose use"
    ```
 4. `mise trust && mise install`
 5. `cd` into the project — `compose.yaml` appears.

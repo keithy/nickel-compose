@@ -3,7 +3,7 @@
 # the examples/dummy-project/ fragment composition workflow.
 #
 # Covers direct export (config.ncl), the dc2nc.sh fragment picker,
-# and nickel-compose.sh use's NICKEL_COMPOSE fallback.
+# and bin/nickel-compose use's NICKEL_COMPOSE fallback.
 #
 # Per bash-spec convention, the spec runs in its own directory.
 # Wrapper subshells that `cd` into another dir pass absolute `--out`
@@ -17,10 +17,17 @@ ROOT="$(cd .. && pwd)"
 # NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
 # without a path prefix. Set it once per spec.
 export NICKEL_IMPORT_PATH="$ROOT"
+# NICKEL_COMPOSE_ROOT lets the bin/ dispatcher (and its helper
+# scripts) locate the engine file via a stable env var rather
+# than script-adjacent paths.
+export NICKEL_COMPOSE_ROOT="$ROOT"
+# Put the new bin/ on PATH so the dispatcher's verb-scripts and
+# the helper scripts in scripts/ can resolve by bare name.
+export PATH="$ROOT/bin:$ROOT/scripts:$PATH"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
 NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
 DC2NC="$ROOT/scripts/dc2nc.sh"
-NC="$ROOT/nickel-compose.sh"
+NC="$ROOT/bin/nickel-compose"
 
 rm -rf out
 mkdir -p out
@@ -284,7 +291,7 @@ EOF
   }
 
   it "use: bare invocation honours \$NICKEL_COMPOSE" && {
-    # Mise/CD-hook case: bare `nickel-compose.sh use` with
+    # Mise/CD-hook case: bare `nickel-compose use` with
     # NICKEL_COMPOSE pointed at a config produces the same render.
     (
       cd "$ROOT/examples/dummy-project"
