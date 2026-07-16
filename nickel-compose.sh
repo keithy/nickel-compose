@@ -93,10 +93,10 @@ verb_report() {
   # — the user runs `use` separately when they want a
   # fresh render.
   #
-  # Special field `source` returns the path of the config
-  # that produced the merged record (read from x-source on
-  # compose.ncl, set by the engine when called via
-  # merge_with_check / merge_with_source).
+  # Fields available: services, ports (the composer.report.*
+  # namespace). The x-check, x-source fields on the merged
+  # record itself are also reachable but typically consumed
+  # by tooling reading the rendered YAML directly.
   if [[ $# -lt 1 ]]; then
     echo "usage: nickel-compose.sh report <field> [<compose.ncl>]" >&2
     exit 1
@@ -110,12 +110,7 @@ verb_report() {
   # Delegate to nickel-compose-run. The `config` name is
   # arbitrary — it just needs to match the expression.
   # compose is pre-loaded by nickel-compose-run.
-  local expr
-  if [[ "$field" == "source" ]]; then
-    expr='config."x-source"'
-  else
-    expr="compose.report.\"$field\" config"
-  fi
+  local expr="compose.report.\"$field\" config"
   "$NC_RUN" config="$ncl" -- "$expr"
 }
 

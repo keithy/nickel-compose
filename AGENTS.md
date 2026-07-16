@@ -159,7 +159,15 @@ This is useful for nickel-compose in two ways:
    Compose runtime ignores it. The wrapper can read it
    from the rendered YAML or the canonical `.ncl` without
    needing a strip step.
-2. **User-facing metadata.** Users can add their own
+2. **The `x-source` provenance field.** The engine
+   attaches the literal path the user passed to `use` (via
+   `merge_with_source fragments "literal-path"`) as
+   `x-source`. Literal, not absolute — this keeps build
+   artifacts reproducible across machines. The absolute
+   path is still available via `_paths.fragments` for
+   `report source` (the verb returns the absolute path
+   because it's the one you can `cat`).
+3. **User-facing metadata.** Users can add their own
    `x-*` fields to fragments for any purpose: cost
    centers, owner teams, deploy notes. The engine
    preserves them through the merge (it's just a regular
@@ -179,6 +187,9 @@ the engine enforces), use a real field with a contract.
   merge,                  # plain merge
   merge_with_check,       # merge + x-check attached
   merge_with_source,      # merge_with_check + x-source attached
+                          # x-source is the LITERAL path passed
+                          # in (relative or absolute, as-given),
+                          # not the absolute resolution
   Service, Port, Volume, Network, Fragment,
   check,                  # alias for validation.check
   validation = { check },

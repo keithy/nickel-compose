@@ -395,4 +395,40 @@ EOF
       true
     fi
   }
+
+  it "x-source in the rendered yaml is the literal path the user typed" && {
+    # x-source is the LITERAL path the user passed to `use`,
+    # not the absolute path the tool resolved. This keeps
+    # build artifacts reproducible across machines.
+    # Write a self-contained config (no fragment imports) so
+    # we can run it from any cwd.
+    mkdir -p "out/literal-src/sub" "out/literal-src/out"
+    cat > "out/literal-src/sub/config.ncl" <<'EOF'
+[
+  { services = { web = { image = "nginx:1.27" } } },
+]
+EOF
+    (
+      cd "out/literal-src"
+      "$TO_WRAPPER" --in "sub/config.ncl" --out "out/x.yaml" >/dev/null 2>&1
+    )
+    should_succeed
+    # x-source must be the literal relative path.
+    SRC_LINE="$(grep '^x-source:' "out/literal-src/out/x.yaml")"
+    if [[ "$SRC_LINE" == *"sub/config.ncl"* ]]; then
+      true
+    else
+      echo "x-source did not contain literal 'sub/config.ncl': $SRC_LINE"
+      false
+    fi
+    should_succeed
+    # And the absolute prefix (the test dir path) must NOT
+    # appear — that's the whole point of literal.
+    if [[ "$SRC_LINE" == *"$ROOT"* || "$SRC_LINE" == *"/out/literal-src"* ]]; then
+      echo "x-source leaked an absolute path: $SRC_LINE"
+      false
+    fi
+    should_succeed
+    rm -rf "out/literal-src"
+  }
 }

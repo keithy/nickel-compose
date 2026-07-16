@@ -87,13 +87,22 @@ fi
 
 # Wrap the user's bare fragment list with the engine and call
 # merge_with_source, writing the result to compose.ncl. The
-# engine sets x-source to the input path, and x-check to the
-# schema report. The expression produces a record — we keep
-# it in Nickel's native form (not yaml) so the .ncl remains
-# re-importable.
+# engine sets x-source to the literal path the user passed
+# (so the artifact is reproducible across machines), and
+# x-check to the schema report. The absolute path is still
+# available via _paths.fragments for tools that need it.
+# The expression produces a record — we keep it in Nickel's
+# native form (not yaml) so the .ncl remains re-importable.
+#
+# The expression is built in the shell (not single-quoted)
+# so the literal "$IN" gets inlined into the Nickel string.
+# The double-quotes around $IN escape any whitespace in the
+# path; the nickel-run path validation rejects paths with
+# double-quote or backslash, so we don't have to escape those.
+expr="compose.merge_with_source fragments \"$IN\""
 "$NICKEL_COMPOSE_RUN" --out "$NCL" \
   fragments="$IN" -- \
-  'compose.merge_with_source fragments _paths.fragments'
+  "$expr"
 
 # Export compose.yaml from compose.ncl. The `x-check` field
 # stays in the output, but Compose silently ignores any `x-*`
