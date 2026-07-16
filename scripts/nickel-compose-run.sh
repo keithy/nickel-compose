@@ -62,23 +62,8 @@ ENGINE_DIR="$(dirname "$ENGINE")"
 NICKEL_IMPORT_PATH="${NICKEL_IMPORT_PATH:+${NICKEL_IMPORT_PATH}:}${ENGINE_DIR}"
 export NICKEL_IMPORT_PATH
 
-# --- forward to nickel-run, prepending compose=ENGINE ---
-
-# Find the -- separator and inject compose=ENGINE before it, leaving
-# everything after -- untouched (the expression).
-ARGS=()
-SEEN_SEP=0
-for arg in "$@"; do
-  if [[ "$SEEN_SEP" -eq 0 ]]; then
-    if [[ "$arg" == "--" ]]; then
-      ARGS+=("compose=$ENGINE" "--")
-      SEEN_SEP=1
-    else
-      ARGS+=("$arg")
-    fi
-  else
-    ARGS+=("$arg")
-  fi
-done
-
-exec "$NICKEL_RUN" "${ARGS[@]}"
+# Forward everything to nickel-run, prepending the engine as
+# a NAME=PATH. The engine becomes the free identifier `compose`
+# in the expression. The user's own NAME=PATH pairs and `--`
+# follow unchanged.
+exec "$NICKEL_RUN" "compose=$ENGINE" "$@"
