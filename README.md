@@ -56,7 +56,7 @@ mise run render -- config=path out=path   # render a custom config
 Or directly:
 
 ```bash
-./nickel-render.sh --config examples/podclaws/config.ncl --out compose.yaml
+./nickel-compose.sh use examples/podclaws/config.ncl --out compose.yaml
 nickel export --format yaml examples/podclaws/config.ncl > compose.yaml
 ```
 
@@ -257,7 +257,6 @@ nickel-compose/
 ├── scripts/
 │   ├── dc2nc.sh                 # fragment picker (stdin or --find-all) → bare-list config.ncl
 │   ├── find-fragments.sh        # discover compose fragments in a tree
-│   ├── from-nickel-compose.sh   # legacy: NICKEL_COMPOSE → config.ncl (kept for reference)
 │   ├── to-compose.sh            # config.ncl → compose.ncl + compose.yaml (with schema check)
 │   └── check.sh                 # strict typecheck (engine + optional user config)
 ├── examples/
@@ -282,7 +281,7 @@ nickel-compose/
 │       ├── check               # typecheck the engine and user config
 │       ├── render              # render config to compose.yml
 │       └── test                # run the bash-spec test suite
-├── nickel-render.sh            # shell wrapper (typecheck + export)
+├── nickel-compose.sh            # dispatcher: use, check, fragments, report, schema
 ├── README.md
 ├── LICENSE
 └── .gitignore

@@ -17,7 +17,6 @@ ROOT="$(cd .. && pwd)"
 # NICKEL_IMPORT_PATH lets the fixtures use `import "nickel-compose.ncl"`
 # without a path prefix. Set it once per spec.
 export NICKEL_IMPORT_PATH="$ROOT"
-FROM_WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
 NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
 DC2NC="$ROOT/scripts/dc2nc.sh"
@@ -351,22 +350,15 @@ EOF
     # The .ncl is the source of truth: it must be a valid Nickel
     # file that, when imported, exposes the merged record. The
     # .yaml is a one-way projection of the same record.
-    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      twostep_config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
-      (
-        cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-      )
-      should_succeed
-      "$TO_WRAPPER" --in "$twostep_config" --out "out/twostep.yaml" >/dev/null
-      should_succeed
+    "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/config.ncl" \
+      --out "out/twostep.yaml" >/dev/null
+    should_succeed
 
-      ncl_at="out/twostep.ncl"
-      expect "$ncl_at" to_exist
-      expect "out/twostep.yaml" to_exist
+    ncl_at="out/twostep.ncl"
+    expect "$ncl_at" to_exist
+    expect "out/twostep.yaml" to_exist
 
-      cat > "out/check-ncl.ncl" <<EOF
+    cat > "out/check-ncl.ncl" <<EOF
 let merged = import "$(pwd)/$ncl_at" in
 {
   ncl_service_count = std.array.length (std.record.fields merged.services),
@@ -374,87 +366,22 @@ let merged = import "$(pwd)/$ncl_at" in
   ncl_has_volumes = std.record.has_field "volumes" merged,
 }
 EOF
-      run nickel export --format json "out/check-ncl.ncl" > "out/check-ncl.json"
-      should_succeed
-      expect_jq "out/check-ncl.json" ".ncl_service_count" to_be "3"
-      expect_jq "out/check-ncl.json" ".ncl_has_networks" to_be "true"
-      expect_jq "out/check-ncl.json" ".ncl_has_volumes" to_be "true"
+    run nickel export --format json "out/check-ncl.ncl" > "out/check-ncl.json"
+    should_succeed
+    expect_jq "out/check-ncl.json" ".ncl_service_count" to_be "3"
+    expect_jq "out/check-ncl.json" ".ncl_has_networks" to_be "true"
+    expect_jq "out/check-ncl.json" ".ncl_has_volumes" to_be "true"
 
-      # Round-trip: deriving .yaml from .ncl must match the
-      # two-step's .yaml output. Both go through `nickel
-      # export` directly.
-      run nickel export --format yaml "$ncl_at" \
-        | sed -n '2,$p' > "out/twostep-derived.yaml"
-      expect_no_diff_no_xsource "out/twostep-derived.yaml" "out/twostep.yaml"
+    # Round-trip: deriving .yaml from .ncl must match the
+    # two-step's .yaml output. Both go through `nickel
+    # export` directly.
+    run nickel export --format yaml "$ncl_at" \
+      | sed -n '2,$p' > "out/twostep-derived.yaml"
+    expect_no_diff_no_xsource "out/twostep-derived.yaml" "out/twostep.yaml"
 
-      rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
-            "out/check-ncl.ncl" "out/check-ncl.json" "$twostep_config"
-    else
-      echo "(skipped — wrapper not executable)"
-      true
-    fi
+    rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
+          "out/check-ncl.ncl" "out/check-ncl.json"
   }
-
-  # Legacy from-nickel-compose.sh tests. Kept until dc2nc.sh has
-  # covered all use cases; the tool is not wired into the
-  # dispatcher anymore but the script stays on disk.
-  context "legacy: from-nickel-compose.sh" && {
-
-  it "from-nickel-compose errors when NICKEL_COMPOSE is unset" && {
-    if [[ -x "$FROM_WRAPPER" ]]; then
-      ERR_LOG="$(pwd)/out/wrapper-unset.stderr"
-      (
-        unset NICKEL_COMPOSE
-        cd "$ROOT/examples/dummy-project"
-        "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null 2>"$ERR_LOG"
-      )
-      should_fail
-      grep -q "NICKEL_COMPOSE not set" "$ERR_LOG"
-      should_succeed
-      rm -f "$ERR_LOG"
-    else
-      echo "(skipped)"
-      true
-    fi
-  }
-
-  it "from-nickel-compose errors when \$VAR reference expands empty" && {
-    if [[ -x "$FROM_WRAPPER" ]]; then
-      ERR_LOG="$(pwd)/out/wrapper-empty.stderr"
-      (
-        cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE='$UNSET_VAR' \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null 2>"$ERR_LOG"
-      )
-      should_fail
-      grep -q "empty fragment list" "$ERR_LOG"
-      should_succeed
-      rm -f "$ERR_LOG"
-    else
-      echo "(skipped)"
-      true
-    fi
-  }
-
-  it "from-nickel-compose errors when --out collides with a fragment" && {
-    if [[ -x "$FROM_WRAPPER" ]]; then
-      ERR_LOG="$(pwd)/out/wrapper-collision.stderr"
-      (
-        cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE="base.yml:services/web.yml" \
-          "$FROM_WRAPPER" --out base.yml >/dev/null 2>"$ERR_LOG"
-      )
-      should_fail
-      grep -q "would clobber source" "$ERR_LOG"
-      should_succeed
-      rm -f "$ERR_LOG"
-    else
-      echo "(skipped)"
-      true
-    fi
-  }
-
-  } # context: legacy from-nickel-compose.sh
 
   it "x-source in the rendered yaml is the literal path the user typed" && {
     # x-source is the LITERAL path the user passed to `use`,
