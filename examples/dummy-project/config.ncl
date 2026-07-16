@@ -15,10 +15,18 @@
 #   visible to the parser. So we list fragments here, by name, in
 #   order.
 #
-# If you prefer to drive the fragment list from an environment
-# variable, see `../../scripts/from-nickel-compose.sh` — it reads
-# $NICKEL_COMPOSE, generates a temporary bare-list config.ncl with
-# literal imports, and runs nickel-compose.
+# To regenerate this file from a curated fragment list, pipe the
+# candidates through `../../scripts/dc2nc.sh --pick` and redirect
+# to this path:
+#
+#   find . \( -name '*.yml' -o -name '*.ncl' \) \
+#     | ../../scripts/dc2nc.sh --pick base.yml \
+#                              --pick services/web.yml \
+#                              --pick services/db.yml \
+#                              --pick overlays/dev.yml \
+#     > config.ncl
+#
+# Or write the bare list by hand — it's just imports.
 
 [
   import "./base.yml",

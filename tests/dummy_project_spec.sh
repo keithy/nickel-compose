@@ -2,8 +2,8 @@
 # tests/dummy_project_spec.sh — bash-spec 2.1 end-to-end tests for
 # the examples/dummy-project/ fragment composition workflow.
 #
-# Covers direct export (config.ncl) and the NICKEL_COMPOSE wrapper
-# under several input shapes (literal paths, $VAR indirection, mixed).
+# Covers direct export (config.ncl), the dc2nc.sh fragment picker,
+# and nickel-compose.sh use's NICKEL_COMPOSE fallback.
 #
 # Per bash-spec convention, the spec runs in its own directory.
 # Wrapper subshells that `cd` into another dir pass absolute `--out`
@@ -20,40 +20,13 @@ export NICKEL_IMPORT_PATH="$ROOT"
 FROM_WRAPPER="$ROOT/scripts/from-nickel-compose.sh"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
 NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
+DC2NC="$ROOT/scripts/dc2nc.sh"
+NC="$ROOT/nickel-compose.sh"
 
 rm -rf out
 mkdir -p out
 
-# The two-step flow: run from- in the dummy-project dir, then to- in
-# the test dir, then diff the result against the golden. Used by
-# four tests that vary only in NICKEL_COMPOSE shape.
-#
-#   run_twostep "literal-path-list"         # literal colon list
-#   run_twostep '$COMPOSE_FILE'             # one env-var ref (set extra via $@)
-#   run_twostep '$A:$B'                     # multiple env-var refs
-#
-# Any extra args are passed as env vars to the subshell, so the
-# caller can set COMPOSE_FILE etc. without polluting the test
-# environment.
-run_twostep() {
-  local compose_value="$1"
-  shift
-  if [[ ! -x "$FROM_WRAPPER" || ! -x "$TO_WRAPPER" ]]; then
-    echo "(skipped — wrapper not executable)"
-    return 0
-  fi
-  local config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
-  (
-    cd "$ROOT/examples/dummy-project"
-    NICKEL_COMPOSE="$compose_value" "$@" \
-      "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-  )
-  should_succeed
-  "$TO_WRAPPER" --in "$config" --out "out/twostep.yaml" >/dev/null
-  should_succeed
-  expect_no_diff_no_xsource "out/twostep.yaml" "out/dummy/compose.yaml"
-  rm -f "out/twostep.yaml" "out/twostep.ncl" "$config"
-}
+# --- helpers ---
 
 describe "dummy-project end-to-end" && {
   DUMMY="$ROOT/examples/dummy-project/config.ncl"
@@ -170,8 +143,208 @@ EOF
     expect_podman_compose "out/dummy/compose.yaml"
   }
 
-  it "two-step flow: NICKEL_COMPOSE literal-only produces equivalent output" && {
-    run_twostep "base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
+  it "dc2nc: picked stdin list produces equivalent output" && {
+    # The original shape: pipe a hand-curated list of fragments
+    # through dc2nc.sh, render the resulting config.ncl, diff
+    # against the golden.
+    config="$ROOT/examples/dummy-project/out/dc2nc-config.ncl"
+    (
+      cd "$ROOT/examples/dummy-project"
+      printf '%s\n' base.yml services/web.yml services/db.yml overlays/dev.yml \
+        | "$DC2NC" --pick base.yml --pick services/web.yml \
+                   --pick services/db.yml --pick overlays/dev.yml \
+        > out/dc2nc-config.ncl
+    )
+    should_succeed
+    # Nickel resolves imports relative to the importing file's
+    # directory, so symlink the file to the project root for the
+    # duration of the render — same trick the use path uses.
+    config_at="$ROOT/examples/dummy-project/dc2nc-config.ncl"
+    cp "$config" "$config_at"
+    "$TO_WRAPPER" --in "$config_at" \
+      --out "$ROOT/tests/out/dc2nc.yaml" >/dev/null
+    should_succeed
+    expect_no_diff_no_xsource "out/dc2nc.yaml" "out/dummy/compose.yaml"
+    rm -f "out/dc2nc.yaml" "$config" "$config_at"
+  }
+
+  it "dc2nc: --find-all runs find itself" && {
+    # --find-all means dc2nc.sh discovers fragments via `find`
+    # rather than reading from stdin. Output must be valid Nickel
+    # and uncomment only the picked fragments.
+    (
+      cd "$ROOT/examples/dummy-project"
+      "$DC2NC" --find-all \
+        --pick base.yml --pick services/web.yml \
+        --pick services/db.yml --pick overlays/dev.yml \
+        > "$ROOT/tests/out/dc2nc-findall.ncl"
+    )
+    should_succeed
+    # All four picks present, uncommented.
+    if grep -q '^  import "./base.yml",' out/dc2nc-findall.ncl \
+       && grep -q '^  import "./services/web.yml",' out/dc2nc-findall.ncl \
+       && grep -q '^  import "./services/db.yml",' out/dc2nc-findall.ncl \
+       && grep -q '^  import "./overlays/dev.yml",' out/dc2nc-findall.ncl; then
+      true
+    else
+      echo "expected all picks uncommented in:" >&2
+      cat out/dc2nc-findall.ncl >&2
+      false
+    fi
+    should_succeed
+    # Unpicked candidates (config*.ncl, base.ncl, services/*.ncl, etc.)
+    # appear as commented examples.
+    if grep -q '^  # import "./config.ncl",' out/dc2nc-findall.ncl \
+       && grep -q '^  # import "./base.ncl",' out/dc2nc-findall.ncl; then
+      true
+    else
+      echo "expected unpicked candidates commented:" >&2
+      cat out/dc2nc-findall.ncl >&2
+      false
+    fi
+    should_succeed
+    rm -f out/dc2nc-findall.ncl
+  }
+
+  it "dc2nc: relative path matches across directories (no collision)" && {
+    # Pick two distinct fragments whose basenames would otherwise
+    # collide in a flat namespace. dc2nc.sh's relative-path match
+    # means they're unambiguously different. No rendering needed —
+    # just check the output shape.
+    mkdir -p out/agent out/database
+    cat > "out/agent/base.yml" <<'EOF'
+services:
+  agent:
+    image: "agent:1"
+EOF
+    cat > "out/database/base.yml" <<'EOF'
+services:
+  database:
+    image: "postgres:16"
+EOF
+    (
+      cd out
+      "$DC2NC" --pick agent/base.yml --pick database/base.yml \
+        > dc2nc-paths.ncl
+    )
+    should_succeed
+    # Both imports uncommented.
+    if grep -q '^  import "./agent/base.yml",' out/dc2nc-paths.ncl \
+       && grep -q '^  import "./database/base.yml",' out/dc2nc-paths.ncl; then
+      true
+    else
+      echo "expected both imports uncommented in:" >&2
+      cat out/dc2nc-paths.ncl >&2
+      false
+    fi
+    should_succeed
+    rm -rf out/agent out/database out/dc2nc-paths.ncl
+  }
+
+  it "dc2nc: unpicked candidates appear as commented examples" && {
+    # When stdin lists more candidates than --pick selects, the
+    # unpicked ones must appear commented in the output (so the
+    # user can see what was available). No rendering needed —
+    # we just check the output shape.
+    (
+      cd "$ROOT/examples/dummy-project"
+      printf '%s\n' base.yml services/web.yml services/db.yml overlays/dev.yml \
+        | "$DC2NC" --pick base.yml --pick services/web.yml \
+        > "$ROOT/tests/out/dc2nc-partial.ncl"
+    )
+    should_succeed
+    # base.yml and services/web.yml are live (uncommented).
+    if grep -q '^  import "./base.yml",' out/dc2nc-partial.ncl \
+       && grep -q '^  import "./services/web.yml",' out/dc2nc-partial.ncl; then
+      true
+    else
+      echo "expected picked imports uncommented" >&2
+      cat out/dc2nc-partial.ncl >&2
+      false
+    fi
+    should_succeed
+    # services/db.yml and overlays/dev.yml are commented.
+    if grep -q '^  # import "./services/db.yml",' out/dc2nc-partial.ncl \
+       && grep -q '^  # import "./overlays/dev.yml",' out/dc2nc-partial.ncl; then
+      true
+    else
+      echo "expected unpicked imports commented" >&2
+      cat out/dc2nc-partial.ncl >&2
+      false
+    fi
+    should_succeed
+    rm -f out/dc2nc-partial.ncl
+  }
+
+  it "dc2nc: errors when no --pick given" && {
+    (
+      cd "$ROOT/examples/dummy-project"
+      "$DC2NC" 2>/dev/null
+    )
+    should_fail
+  }
+
+  it "use: bare invocation honours \$NICKEL_COMPOSE" && {
+    # Mise/CD-hook case: bare `nickel-compose.sh use` with
+    # NICKEL_COMPOSE pointed at a config produces the same render.
+    (
+      cd "$ROOT/examples/dummy-project"
+      rm -f compose.ncl compose.yaml
+      NICKEL_COMPOSE="config.ncl" "$NC" use \
+        --out "$(pwd)/compose.yaml" >/dev/null
+    )
+    should_succeed
+    expect_no_diff_no_xsource \
+      "$ROOT/examples/dummy-project/compose.yaml" \
+      "out/dummy/compose.yaml"
+    rm -f "$ROOT/examples/dummy-project/compose.ncl" \
+          "$ROOT/examples/dummy-project/compose.yaml"
+  }
+
+  it "use: explicit config arg overrides \$NICKEL_COMPOSE" && {
+    # Point NICKEL_COMPOSE at config_ncl.ncl (pure-Nickel form)
+    # but pass config.ncl explicitly. The render must use
+    # config.ncl (x-source confirms), not config_ncl.ncl.
+    (
+      cd "$ROOT/examples/dummy-project"
+      rm -f compose.ncl compose.yaml
+      NICKEL_COMPOSE="config_ncl.ncl" "$NC" use config.ncl \
+        --out "$(pwd)/compose.yaml" >/dev/null
+    )
+    should_succeed
+    if [[ ! -f "$ROOT/examples/dummy-project/compose.ncl" ]]; then
+      echo "compose.ncl was not written" >&2
+      false
+    fi
+    should_succeed
+    if grep -q '^x-source: config\.ncl$' \
+         "$ROOT/examples/dummy-project/compose.yaml"; then
+      true
+    else
+      echo "x-source did not reflect explicit config.ncl:" >&2
+      grep '^x-source:' "$ROOT/examples/dummy-project/compose.yaml" >&2
+      false
+    fi
+    should_succeed
+    rm -f "$ROOT/examples/dummy-project/compose.ncl" \
+          "$ROOT/examples/dummy-project/compose.yaml"
+  }
+
+  it "use: no arg and no NICKEL_COMPOSE defaults to ./config.ncl" && {
+    # No NICKEL_COMPOSE, no explicit arg — falls back to the
+    # cwd's config.ncl.
+    (
+      cd "$ROOT/examples/dummy-project"
+      unset NICKEL_COMPOSE
+      rm -f compose.ncl compose.yaml
+      "$NC" use --out "$(pwd)/compose.yaml" >/dev/null
+    )
+    should_succeed
+    expect_no_diff_no_xsource \
+      "$ROOT/examples/dummy-project/compose.yaml" \
+      "out/dummy/compose.yaml"
+    rm -f "$ROOT/examples/dummy-project/compose.ncl" \
+          "$ROOT/examples/dummy-project/compose.yaml"
   }
 
   it "two-step flow: compose.ncl is canonical and importable" && {
@@ -179,17 +352,17 @@ EOF
     # file that, when imported, exposes the merged record. The
     # .yaml is a one-way projection of the same record.
     if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      local config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
+      twostep_config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
       (
         cd "$ROOT/examples/dummy-project"
         NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
           "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
-      "$TO_WRAPPER" --in "$config" --out "out/twostep.yaml" >/dev/null
+      "$TO_WRAPPER" --in "$twostep_config" --out "out/twostep.yaml" >/dev/null
       should_succeed
 
-      local ncl_at="out/twostep.ncl"
+      ncl_at="out/twostep.ncl"
       expect "$ncl_at" to_exist
       expect "out/twostep.yaml" to_exist
 
@@ -215,29 +388,17 @@ EOF
       expect_no_diff_no_xsource "out/twostep-derived.yaml" "out/twostep.yaml"
 
       rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
-            "out/check-ncl.ncl" "out/check-ncl.json" "$config"
+            "out/check-ncl.ncl" "out/check-ncl.json" "$twostep_config"
     else
       echo "(skipped — wrapper not executable)"
       true
     fi
   }
 
-  it "two-step flow (Stage 0): NICKEL_COMPOSE='\$COMPOSE_FILE'" && {
-    run_twostep '$COMPOSE_FILE' \
-      COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
-  }
-
-  it "two-step flow (Stage 1): split env vars" && {
-    run_twostep '$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
-      COMPOSE_SERVICES="services/web.yml:services/db.yml" \
-      COMPOSE_OVERLAYS="overlays/dev.yml" \
-      COMPOSE_FILE="base.yml"
-  }
-
-  it "two-step flow: NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
-    run_twostep 'base.yml:services/web.yml:$REMAINING' \
-      REMAINING="services/db.yml:overlays/dev.yml"
-  }
+  # Legacy from-nickel-compose.sh tests. Kept until dc2nc.sh has
+  # covered all use cases; the tool is not wired into the
+  # dispatcher anymore but the script stays on disk.
+  context "legacy: from-nickel-compose.sh" && {
 
   it "from-nickel-compose errors when NICKEL_COMPOSE is unset" && {
     if [[ -x "$FROM_WRAPPER" ]]; then
@@ -292,6 +453,8 @@ EOF
       true
     fi
   }
+
+  } # context: legacy from-nickel-compose.sh
 
   it "x-source in the rendered yaml is the literal path the user typed" && {
     # x-source is the LITERAL path the user passed to `use`,

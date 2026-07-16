@@ -249,6 +249,15 @@ implementation is two layers:
   `nickel-compose-run` to produce `compose.ncl`, then derives
   `compose.yaml` via `nickel export` and reads `x-check.ok` for
   the exit code.
+- **`scripts/dc2nc.sh`** — fragment picker. Reads a list of
+  candidate paths on stdin (one per line), takes `--pick PATH`
+  (repeatable, or as bare positionals), and writes a bare-list
+  `config.ncl` on stdout. All candidates appear as commented
+  examples; the picked subset is uncommented and live. With
+  `--find-all`, dc2nc runs `find . \( -name '*.yml' -o -name
+  '*.ncl' \)` itself. With empty stdin (and no `--find-all`),
+  falls back to the same `find` so `dc2nc.sh --pick foo.yml`
+  works without a pipe.
 
 In a `nickel-run` expression, each `NAME=PATH` shows up as a
 free identifier — `cfg.services.web.image`, not
