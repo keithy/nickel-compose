@@ -15,8 +15,6 @@ Verbs:
                                     # config.ncl defaults to \$NICKEL_COMPOSE
                                     # else ./config.ncl
   check [config.ncl]                # strict typecheck
-  fragments [--root <dir>] [--out <file>]
-                                    # discover compose fragments
   report <field> [<compose.ncl>]    # query the merged record
                                     # (re-render with \`use\` first)
   schema <Contract> [field]         # show a contract's fields
