@@ -10,6 +10,16 @@
 #   expect_no_diff <gen> <expected>
 #                                    Diff gen vs expected; when INIT=true, copy
 #                                    gen over expected instead (snapshot regen).
+#   expect_no_diff_no_xsource <gen> <expected>
+#                                    Like expect_no_diff, but strips the
+#                                    `x-source:` line from both files first.
+#                                    The x-source field is provenance metadata
+#                                    (the literal path the user typed) and
+#                                    varies per call site, so it can't be part
+#                                    of a golden comparison.
+#   expect_podman_compose <yaml>     Run `podman-compose -f <yaml> config` and
+#                                    assert success. Skips silently if
+#                                    podman-compose isn't on PATH.
 #   expect_jq <file> <expr> to_be <value>
 #                                    Like `expect <file> to_exist`, but jq-queries
 #                                    the file: runs `jq -r <expr> <file>` and
@@ -111,4 +121,49 @@ function expect_jq {
   }
   _actual_=("$_val")
   "$@"
+}
+
+# expect_no_diff_no_xsource: like expect_no_diff, but strips the
+# `x-source:` line from both files before comparing. The x-source
+# field on the merged record is provenance metadata (the literal
+# path the user passed to `use`) and varies per call site, so
+# golden comparisons must ignore it.
+#
+# Implementation: write stripped copies to a side-by-side temp
+# location, then delegate to expect_no_diff. INIT mode copies
+# the stripped file to the expected path — useful for the case
+# where the golden has an old x-source: line and you want to
+# update it.
+expect_no_diff_no_xsource() {
+  local _generated="$1" _expected="$2"
+  local _gen_strip="${_generated}.no-xsource"
+  local _exp_strip="${_expected}.no-xsource"
+  grep -v '^x-source:' "$_generated" > "$_gen_strip"
+  if [[ -f "$_expected" ]]; then
+    grep -v '^x-source:' "$_expected" > "$_exp_strip"
+  else
+    # expect_no_diff will report the missing file clearly.
+    : > "$_exp_strip"
+  fi
+  expect_no_diff "$_gen_strip" "$_exp_strip"
+  rm -f "$_gen_strip" "$_exp_strip"
+}
+
+# expect_podman_compose: run `podman-compose -f <yaml> config`
+# and assert success. Skips silently (with a "(skipped)" note
+# on stdout) if podman-compose isn't on PATH, so the test still
+# passes in environments without podman.
+#
+# Usage:
+#   expect_podman_compose "out/dummy/compose.yaml"
+#   expect_podman_compose            # default: out/dummy/compose.yaml
+expect_podman_compose() {
+  local _yaml="${1:-out/dummy/compose.yaml}"
+  if command -v podman-compose >/dev/null 2>&1; then
+    podman-compose -f "$_yaml" config >/dev/null
+    should_succeed
+  else
+    echo "(skipped — podman-compose not installed)"
+    true
+  fi
 }

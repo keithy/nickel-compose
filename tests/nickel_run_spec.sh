@@ -22,7 +22,6 @@ mkdir -p out
 capture_run() {
   OUT="$(mise exec -- "$@" 2>"out/.stderr")"
   RC=$?
-  cp "out/.stderr" "out/.stderr.last" 2>/dev/null || true
   ERR="$(cat out/.stderr)"
   rm -f out/.stderr
   return $RC

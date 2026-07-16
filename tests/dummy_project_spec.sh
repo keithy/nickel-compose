@@ -24,6 +24,37 @@ NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
 rm -rf out
 mkdir -p out
 
+# The two-step flow: run from- in the dummy-project dir, then to- in
+# the test dir, then diff the result against the golden. Used by
+# four tests that vary only in NICKEL_COMPOSE shape.
+#
+#   run_twostep "literal-path-list"         # literal colon list
+#   run_twostep '$COMPOSE_FILE'             # one env-var ref (set extra via $@)
+#   run_twostep '$A:$B'                     # multiple env-var refs
+#
+# Any extra args are passed as env vars to the subshell, so the
+# caller can set COMPOSE_FILE etc. without polluting the test
+# environment.
+run_twostep() {
+  local compose_value="$1"
+  shift
+  if [[ ! -x "$FROM_WRAPPER" || ! -x "$TO_WRAPPER" ]]; then
+    echo "(skipped — wrapper not executable)"
+    return 0
+  fi
+  local config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
+  (
+    cd "$ROOT/examples/dummy-project"
+    NICKEL_COMPOSE="$compose_value" "$@" \
+      "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
+  )
+  should_succeed
+  "$TO_WRAPPER" --in "$config" --out "out/twostep.yaml" >/dev/null
+  should_succeed
+  expect_no_diff_no_xsource "out/twostep.yaml" "out/dummy/compose.yaml"
+  rm -f "out/twostep.yaml" "out/twostep.ncl" "$config"
+}
+
 describe "dummy-project end-to-end" && {
   DUMMY="$ROOT/examples/dummy-project/config.ncl"
 
@@ -45,25 +76,15 @@ describe "dummy-project end-to-end" && {
   }
 
   it "YAML output matches expected snapshot" && {
-    # Strip x-source: it's a provenance field, not part of the
-    # contract. The contract is "the merged record is identical."
-    grep -v '^x-source:' "out/dummy/compose.yaml" > "out/dummy/expected-stripped.yml"
-    grep -v '^x-source:' "expected/dummy/compose.yaml" > "out/dummy/golden-stripped.yml"
-    expect_no_diff "out/dummy/expected-stripped.yml" "out/dummy/golden-stripped.yml"
+    expect_no_diff_no_xsource "out/dummy/compose.yaml" "expected/dummy/compose.yaml"
   }
 
   it "config_ncl.ncl (all Nickel) produces byte-identical output" && {
-    # x-source reflects the real path of the config, so it
-    # differs per config file. Filter it out before comparing
-    # — the contract is "merged record is identical, not
-    # provenance metadata."
     run "$TO_WRAPPER" \
       --in "$ROOT/examples/dummy-project/config_ncl.ncl" \
       --out "$(pwd)/out/dummy/compose-ncl.yml"
     should_succeed
-    grep -v '^x-source:' "out/dummy/compose-ncl.yml"  > "out/dummy/ncl-stripped.yml"
-    grep -v '^x-source:' "expected/dummy/compose.yaml" > "out/dummy/ncl-golden.yml"
-    expect_no_diff "out/dummy/ncl-stripped.yml" "out/dummy/ncl-golden.yml"
+    expect_no_diff_no_xsource "out/dummy/compose-ncl.yml" "expected/dummy/compose.yaml"
   }
 
   it "config_mixed.ncl (mixed YAML + Nickel) produces byte-identical output" && {
@@ -71,9 +92,7 @@ describe "dummy-project end-to-end" && {
       --in "$ROOT/examples/dummy-project/config_mixed.ncl" \
       --out "$(pwd)/out/dummy/compose-mixed.yml"
     should_succeed
-    grep -v '^x-source:' "out/dummy/compose-mixed.yml"  > "out/dummy/mixed-stripped.yml"
-    grep -v '^x-source:' "expected/dummy/compose.yaml"   > "out/dummy/mixed-golden.yml"
-    expect_no_diff "out/dummy/mixed-stripped.yml" "out/dummy/mixed-golden.yml"
+    expect_no_diff_no_xsource "out/dummy/compose-mixed.yml" "expected/dummy/compose.yaml"
   }
 
   it "config_no_base.ncl validates: engine synthesizes top-level volumes from services" && {
@@ -94,13 +113,7 @@ describe "dummy-project end-to-end" && {
     # The synthesized top-level volumes: web-data, db-data.
     expect_jq "out/dummy/compose-no-base.json" '.volumes | has("web-data")' to_be "true"
     expect_jq "out/dummy/compose-no-base.json" '.volumes | has("db-data")'  to_be "true"
-    if command -v podman-compose >/dev/null 2>&1; then
-      podman-compose -f "out/dummy/compose-no-base.yml" config >/dev/null
-      should_succeed
-    else
-      echo "(skipped — podman-compose not installed)"
-      true
-    fi
+    expect_podman_compose "out/dummy/compose-no-base.yml"
   }
 
   it "all three services present (web, db, redis)" && {
@@ -154,47 +167,11 @@ EOF
   }
 
   it "validates through podman-compose" && {
-    if command -v podman-compose >/dev/null 2>&1; then
-      podman-compose -f "out/dummy/compose.yaml" config >/dev/null
-      should_succeed
-    else
-      echo "(skipped)"
-      true
-    fi
+    expect_podman_compose "out/dummy/compose.yaml"
   }
 
   it "two-step flow: NICKEL_COMPOSE literal-only produces equivalent output" && {
-    # Run the from- wrapper (produces config.ncl) then the to-
-    # wrapper (renders compose.ncl + compose.yaml). The result
-    # should match the golden snapshot produced by direct
-    # `nickel export config.ncl`.
-    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      (
-        cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-      )
-      should_succeed
-
-      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
-        --out "out/wrapper-literal.yaml" >/dev/null
-      should_succeed
-
-      if ! diff -q <(grep -v '^x-source:' "out/wrapper-literal.yaml") \
-                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
-        diff <(grep -v '^x-source:' "out/wrapper-literal.yaml") \
-             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
-        echo "literal-path two-step output differs from golden"
-        false
-      fi
-      should_succeed
-
-      rm -f "out/wrapper-literal.yaml" "out/wrapper-literal.ncl" \
-            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
-    else
-      echo "(skipped — wrapper not executable)"
-      true
-    fi
+    run_twostep "base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
   }
 
   it "two-step flow: compose.ncl is canonical and importable" && {
@@ -202,22 +179,22 @@ EOF
     # file that, when imported, exposes the merged record. The
     # .yaml is a one-way projection of the same record.
     if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
+      local config="$ROOT/examples/dummy-project/out/twostep-config.ncl"
       (
         cd "$ROOT/examples/dummy-project"
         NICKEL_COMPOSE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
           "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
       )
       should_succeed
-      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
-        --out "out/twostep.yaml" >/dev/null
+      "$TO_WRAPPER" --in "$config" --out "out/twostep.yaml" >/dev/null
       should_succeed
 
-      NCL_AT="out/twostep.ncl"
-      expect "$NCL_AT" to_exist
+      local ncl_at="out/twostep.ncl"
+      expect "$ncl_at" to_exist
       expect "out/twostep.yaml" to_exist
 
       cat > "out/check-ncl.ncl" <<EOF
-let merged = import "$(pwd)/$NCL_AT" in
+let merged = import "$(pwd)/$ncl_at" in
 {
   ncl_service_count = std.array.length (std.record.fields merged.services),
   ncl_has_networks = std.record.has_field "networks" merged,
@@ -232,24 +209,13 @@ EOF
 
       # Round-trip: deriving .yaml from .ncl must match the
       # two-step's .yaml output. Both go through `nickel
-      # export` directly; the x-check field is preserved
-      # in both (Compose's x-* extension fields are kept
-      # by nickel export and ignored at runtime). The
-      # comparison is byte-equality of the rendered YAML.
-      run nickel export --format yaml "$NCL_AT" \
+      # export` directly.
+      run nickel export --format yaml "$ncl_at" \
         | sed -n '2,$p' > "out/twostep-derived.yaml"
-      if ! diff -q <(grep -v '^x-source:' "out/twostep-derived.yaml") \
-                    <(grep -v '^x-source:' "out/twostep.yaml") >/dev/null 2>&1; then
-        diff <(grep -v '^x-source:' "out/twostep-derived.yaml") \
-             <(grep -v '^x-source:' "out/twostep.yaml") | head -20
-        echo "derived yaml does not match two-step output"
-        false
-      fi
-      should_succeed
+      expect_no_diff_no_xsource "out/twostep-derived.yaml" "out/twostep.yaml"
 
       rm -f "out/twostep.yaml" "out/twostep.ncl" "out/twostep-derived.yaml" \
-            "out/check-ncl.ncl" "out/check-ncl.json" \
-            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
+            "out/check-ncl.ncl" "out/check-ncl.json" "$config"
     else
       echo "(skipped — wrapper not executable)"
       true
@@ -257,89 +223,20 @@ EOF
   }
 
   it "two-step flow (Stage 0): NICKEL_COMPOSE='\$COMPOSE_FILE'" && {
-    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      (
-        cd "$ROOT/examples/dummy-project"
-        COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml" \
-          NICKEL_COMPOSE='$COMPOSE_FILE' \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-      )
-      should_succeed
-      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
-        --out "out/stage0.yaml" >/dev/null
-      should_succeed
-      if ! diff -q <(grep -v '^x-source:' "out/stage0.yaml") \
-                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
-        diff <(grep -v '^x-source:' "out/stage0.yaml") \
-             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
-        echo "stage 0 output differs from golden"
-        false
-      fi
-      should_succeed
-      rm -f "out/stage0.yaml" "out/stage0.ncl" \
-            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
-    else
-      echo "(skipped)"
-      true
-    fi
+    run_twostep '$COMPOSE_FILE' \
+      COMPOSE_FILE="base.yml:services/web.yml:services/db.yml:overlays/dev.yml"
   }
 
   it "two-step flow (Stage 1): split env vars" && {
-    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      (
-        cd "$ROOT/examples/dummy-project"
-        COMPOSE_SERVICES="services/web.yml:services/db.yml" \
-          COMPOSE_OVERLAYS="overlays/dev.yml" \
-          COMPOSE_FILE="base.yml" \
-          NICKEL_COMPOSE='$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-      )
-      should_succeed
-      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
-        --out "out/stage1.yaml" >/dev/null
-      should_succeed
-      if ! diff -q <(grep -v '^x-source:' "out/stage1.yaml") \
-                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
-        diff <(grep -v '^x-source:' "out/stage1.yaml") \
-             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
-        echo "stage 1 output differs from golden"
-        false
-      fi
-      should_succeed
-      rm -f "out/stage1.yaml" "out/stage1.ncl" \
-            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
-    else
-      echo "(skipped)"
-      true
-    fi
+    run_twostep '$COMPOSE_SERVICES:$COMPOSE_OVERLAYS:$COMPOSE_FILE' \
+      COMPOSE_SERVICES="services/web.yml:services/db.yml" \
+      COMPOSE_OVERLAYS="overlays/dev.yml" \
+      COMPOSE_FILE="base.yml"
   }
 
   it "two-step flow: NICKEL_COMPOSE accepts mixed literals and env-var refs" && {
-    if [[ -x "$FROM_WRAPPER" && -x "$TO_WRAPPER" ]]; then
-      (
-        cd "$ROOT/examples/dummy-project"
-        NICKEL_COMPOSE='base.yml:services/web.yml:$REMAINING' \
-          REMAINING="services/db.yml:overlays/dev.yml" \
-          "$FROM_WRAPPER" --out out/twostep-config.ncl >/dev/null
-      )
-      should_succeed
-      "$TO_WRAPPER" --in "$ROOT/examples/dummy-project/out/twostep-config.ncl" \
-        --out "out/mixed.yaml" >/dev/null
-      should_succeed
-      if ! diff -q <(grep -v '^x-source:' "out/mixed.yaml") \
-                    <(grep -v '^x-source:' "out/dummy/compose.yaml") >/dev/null 2>&1; then
-        diff <(grep -v '^x-source:' "out/mixed.yaml") \
-             <(grep -v '^x-source:' "out/dummy/compose.yaml") | head -20
-        echo "mixed form output differs from golden"
-        false
-      fi
-      should_succeed
-      rm -f "out/mixed.yaml" "out/mixed.ncl" \
-            "$ROOT/examples/dummy-project/out/twostep-config.ncl"
-    else
-      echo "(skipped)"
-      true
-    fi
+    run_twostep 'base.yml:services/web.yml:$REMAINING' \
+      REMAINING="services/db.yml:overlays/dev.yml"
   }
 
   it "from-nickel-compose errors when NICKEL_COMPOSE is unset" && {
