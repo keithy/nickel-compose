@@ -31,7 +31,7 @@
 # the same directory.
 #
 # Implementation: this script is a thin orchestrator. The actual
-# eval happens in scripts/nickel-compose-run.sh, which pre-loads
+# eval happens in bin/nickel-compose-run.sh, which pre-loads
 # the engine as `compose` and runs the standard merge expression
 # against the user's fragment list.
 
@@ -78,11 +78,10 @@ case "$OUT" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Prefer the script-adjacent copy; fall back to PATH for mise-
-# installed users where to-compose.sh lives in bin/ alongside
-# nickel-compose-run.sh.
-if [[ -x "$SCRIPT_DIR/nickel-compose-run.sh" ]]; then
-  NICKEL_COMPOSE_RUN="$SCRIPT_DIR/nickel-compose-run.sh"
+# Prefer the sibling in bin/ (where nickel-compose-run.sh lives);
+# fall back to PATH for mise-installed users.
+if [[ -x "$SCRIPT_DIR/../bin/nickel-compose-run.sh" ]]; then
+  NICKEL_COMPOSE_RUN="$SCRIPT_DIR/../bin/nickel-compose-run.sh"
 else
   NICKEL_COMPOSE_RUN="nickel-compose-run.sh"
 fi

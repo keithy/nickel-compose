@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/nickel-compose-run.sh — nickel-run pre-loaded with the engine.
+# bin/nickel-compose-run.sh — nickel-run pre-loaded with the engine.
 #
 # Thin wrapper around nickel-run. Adds:
 #   - `compose` as a free identifier in the expression (the
@@ -25,8 +25,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Prefer the script-adjacent nickel-run.sh; fall back to PATH
-# (so mise-installed users get the bin/ version).
+# Prefer the script-adjacent nickel-run.sh (both live in bin/),
+# fall back to PATH (so mise-installed users get the bin/ version).
 if [[ -x "$SCRIPT_DIR/nickel-run.sh" ]]; then
   NICKEL_RUN="$SCRIPT_DIR/nickel-run.sh"
 else

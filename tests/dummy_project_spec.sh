@@ -25,7 +25,7 @@ export NICKEL_COMPOSE_ROOT="$ROOT"
 # the helper scripts in scripts/ can resolve by bare name.
 export PATH="$ROOT/bin:$ROOT/scripts:$PATH"
 TO_WRAPPER="$ROOT/scripts/to-compose.sh"
-NC_RUN="$ROOT/scripts/nickel-compose-run.sh"
+NC_RUN="$ROOT/bin/nickel-compose-run.sh"
 DC2NC="$ROOT/scripts/dc2nc.sh"
 NC="$ROOT/bin/nickel-compose"
 
