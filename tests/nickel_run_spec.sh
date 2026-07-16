@@ -177,38 +177,28 @@ EOF
     expect "$OUT" to_match 'greeting="hello world"'
   }
 
-  it "--raw rejects --format env" && {
-    cat > "out/data.ncl" <<'EOF'
-{ name = "alice" }
-EOF
-    capture_run "$NR" --format env --raw "f=out/data.ncl" -- 'f'
-    should_fail
-    expect "$ERR" to_match '--raw cannot be combined with --format env'
-  }
-
-  it "--raw rejects --format bash" && {
-    cat > "out/data.ncl" <<'EOF'
-{ name = "alice" }
-EOF
-    capture_run "$NR" --format bash --raw "f=out/data.ncl" -- 'f'
-    should_fail
-    expect "$ERR" to_match '--raw cannot be combined with --format bash'
-  }
-
-  it "--raw strips quotes from a scalar result (json)" && {
+  it "--raw strips quotes from a scalar result" && {
     cat > "out/data.ncl" <<'EOF'
 { name = "alice", port = 8080 }
 EOF
-    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.name'
+    capture_run "$NR" --raw "f=out/data.ncl" -- 'f.name'
     expect "$OUT" to_be 'alice'
     expect "$OUT" to_not_match '"'
+  }
+
+  it "--format raw is equivalent to --raw" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice", port = 8080 }
+EOF
+    capture_run "$NR" --format raw "f=out/data.ncl" -- 'f.name'
+    expect "$OUT" to_be 'alice'
   }
 
   it "--raw prints one element per line for an array of scalars" && {
     cat > "out/data.ncl" <<'EOF'
 { items = [ "alpha", "beta", "gamma" ] }
 EOF
-    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.items'
+    capture_run "$NR" --raw "f=out/data.ncl" -- 'f.items'
     expect "$OUT" to_be 'alpha
 beta
 gamma'
@@ -218,7 +208,7 @@ gamma'
     cat > "out/data.ncl" <<'EOF'
 { services = { web = { image = "nginx" } } }
 EOF
-    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.services'
+    capture_run "$NR" --raw "f=out/data.ncl" -- 'f.services'
     expect "$OUT" to_match '"web"'
     expect "$OUT" to_match '"image"'
     expect "$OUT" to_match '"nginx"'
@@ -228,26 +218,18 @@ EOF
     cat > "out/data.ncl" <<'EOF'
 { name = "alice" }
 EOF
-    capture_run "$NR" --format json --raw --out "out/raw-name.txt" "f=out/data.ncl" -- 'f.name'
+    capture_run "$NR" --raw --out "out/raw-name.txt" "f=out/data.ncl" -- 'f.name'
     expect "$(cat out/raw-name.txt)" to_be 'alice'
   }
 
-  it "--raw rejects --format yaml (jq -r only understands JSON)" && {
+  it "last --format/--raw wins (no conflict error)" && {
     cat > "out/data.ncl" <<'EOF'
 { name = "alice" }
 EOF
-    capture_run "$NR" --format yaml --raw "f=out/data.ncl" -- 'f.name'
-    should_fail
-    expect "$ERR" to_match '--raw requires --format json'
-  }
-
-  it "--raw rejects --format ncl (no export, no jq pipeline)" && {
-    cat > "out/data.ncl" <<'EOF'
-{ name = "alice" }
-EOF
-    capture_run "$NR" --raw "f=out/data.ncl" -- 'f.name'
-    should_fail
-    expect "$ERR" to_match '--raw requires --format json'
+    # --format env then --raw: --raw wins, output is raw.
+    capture_run "$NR" --format env --raw "f=out/data.ncl" -- 'f.name'
+    should_succeed
+    expect "$OUT" to_be 'alice'
   }
 
   it "--out writes to a file and suppresses stdout" && {

@@ -34,7 +34,7 @@ fundamentally "load N files, evaluate an expression, serialize."
 ## CLI
 
 ```
-nickel-run [--keep] [--format FMT] [--raw] [--out FILE]
+nickel-run [--keep] [--format FMT | --raw] [--out FILE]
            NAME=PATH [NAME=PATH...] -- EXPRESSION
 ```
 
@@ -43,16 +43,18 @@ nickel-run [--keep] [--format FMT] [--raw] [--out FILE]
 - `--keep` — leave the temp wrapper on disk for debugging.
   The path is printed to stderr.
 - `--format FMT` — output format: `ncl` (default), `json`,
-  `yaml`, `yml`, `toml`, `env`, `bash`. Non-ncl formats pipe
-  through `nickel export --format FMT` (except `env` and `bash`,
-  which use `json` internally then `jq`-translate).
-- `--raw` — flatten the result for shell consumption. Only valid
-  with `--format json`. Behavior depends on the result type:
+  `yaml`, `yml`, `toml`, `raw`, `env`, `bash`. Most formats pipe
+  through `nickel export --format FMT`. `raw`, `env`, and `bash`
+  use `json` internally then `jq`-translate.
+- `--raw` — alias for `--format raw`. Flattens the result for
+  shell consumption:
   - **scalar**: prints the value unquoted (`nginx:1.27`)
   - **array of scalars**: one element per line
   - **record/object**: passes through unchanged
-  Mutually exclusive with `--format env` and `--format bash`
-  (both are already flattened forms).
+
+  If both `--format FMT` and `--raw` are passed, the last one
+  wins (no error). Use the explicit form only when you want a
+  specific format flag for clarity.
 - `--out FILE` — write to FILE instead of stdout. Refuses to
   clobber an input.
 - `NAME=PATH` — one or more named inputs. `NAME` must be a valid
@@ -81,12 +83,14 @@ multi-statement scripts.
 | `yaml` | `eval \| export --format yaml`|                                         |
 | `yml`  | `eval \| export --format yaml`| alias                                   |
 | `toml` | `eval \| export --format toml`|                                         |
+| `raw`  | `eval \| export \| jq flatten`| scalars unquoted, arrays one per line   |
 | `env`  | `eval \| export \| jq dotenv` | `KEY=VALUE` per line, JSON-encoded vals |
 | `bash` | `eval \| export \| jq bash`   | sourceable; arrays as `KEY=(a b c)`     |
 
-`env` and `bash` are jq translations of the JSON export; they
-share the `--format json` pipeline and add a final `jq -r` step.
-The user-supplied jq filter is what differentiates them.
+`raw`, `env`, and `bash` are jq translations of the JSON
+export; they share the `--format json` pipeline and add a final
+`jq -r` step. The user-supplied jq filter is what differentiates
+them.
 
 ## Output examples
 
@@ -116,11 +120,11 @@ $ nickel-run --format json cfg=my-config.ncl -- 'cfg'
 }
 
 # 5. Raw scalar (unquoted)
-$ nickel-run --format json --raw cfg=my-config.ncl -- 'cfg.services.web.image'
+$ nickel-run --raw cfg=my-config.ncl -- 'cfg.services.web.image'
 nginx:1.27
 
 # 6. Raw array (one per line)
-$ nickel-run --format json --raw cfg=my-config.ncl -- 'std.record.fields cfg.services'
+$ nickel-run --raw cfg=my-config.ncl -- 'std.record.fields cfg.services'
 web
 db
 redis
@@ -176,9 +180,9 @@ suite is grouped by topic:
 - **Format dispatch** — `ncl` default, `json`/`yaml`/`yml`/`toml`
   pass through `nickel export --format FMT`, `env`/`bash` are
   jq-translated.
-- **`--raw` behavior** — scalar → unquoted, array of scalars →
-  one per line, record → unchanged; rejected with `--format
-  env`/`bash`; rejected with non-json formats.
+- **`--raw` / `--format raw` behavior** — scalar → unquoted,
+  array of scalars → one per line, record → unchanged; alias
+  for `--format raw`; last `--format`/`--raw` wins if both given.
 - **`--out FILE`** — writes to file, refuses to clobber inputs.
 - **`--keep`** — leaves wrapper on disk on failure.
 - **Error handling** — eval failure keeps wrapper for inspection;
@@ -196,7 +200,7 @@ The wrapper exists because the upstream CLI doesn't have this
 subcommand. The proposed native equivalent:
 
 ```
-nickel run [--format FMT] [--raw] [--out FILE]
+nickel run [--format FMT | --raw] [--out FILE]
            NAME=PATH [NAME=PATH...] -- EXPRESSION
 ```
 
