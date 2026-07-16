@@ -1,20 +1,49 @@
 #!/usr/bin/env bash
-# scripts/nickel-run.sh — generic nickel invocation wrapper.
+# bin/nickel-run.sh — generic nickel invocation wrapper.
+#
+# NOTE: this script is a candidate to extract from nickel-compose into
+# its own repo (e.g. `nickel-run`). It has no nickel-compose-specific
+# logic — it doesn't set NICKEL_IMPORT_PATH, doesn't import the merge
+# engine, and doesn't touch compose semantics. Anything in this repo
+# that wants to call it would resolve it as a sibling repo on PATH.
+# A Rust rewrite is also worth considering: almost all of this script
+# is string-templating (build the wrapper file) plus a `nickel eval`
+# subprocess call, both of which are more pleasant as a small Rust
+# binary that takes the same CLI shape.
 #
 # A pure tool. Takes one or more named input files, builds a temp
 # wrapper that imports each as a Nickel value, evaluates a user-
 # supplied expression against them, and prints the result.
 #
 # Usage:
-#   nickel-run [--keep] [--format FMT] [--out FILE] \
+#   nickel-run [--keep] [--format FMT] [--raw] [--out FILE] \
 #              NAME=PATH [NAME=PATH...] -- EXPRESSION
 #
 # Arguments:
 #   --keep          Leave the temp wrapper on disk for debugging
 #                   (printed to stderr).
 #   --format FMT    Output format: ncl (default), json, yaml, yml,
-#                   toml. Non-ncl formats pipe through
-#                   `nickel export --format FMT`.
+#                   toml, env, bash. Non-ncl formats pipe through
+#                   `nickel export --format FMT` (except env and
+#                   bash, which use `--format json` internally then
+#                   jq-translate). env emits dotenv-style KEY=VALUE
+#                   per line; bash emits sourceable bash syntax
+#                   with arrays as KEY=(...).
+#   --raw           Strip enclosing quotes from the result. Only
+#                   meaningful with --format json (the format the
+#                   shell sees first); pipes through `jq -r` after
+#                   export. Behavior depends on the result type:
+#                     - scalar: prints the value unquoted
+#                       (e.g. nginx:1.27, not "nginx:1.27")
+#                     - array of scalars: prints one element per line
+#                     - record / object: prints unchanged
+#                       (quotes around keys are required JSON)
+#                   Use for piping into shell scripts that want one
+#                   value or one-per-line. For structured output
+#                   you intend to query, omit --raw and pipe
+#                   through jq with your own filter. Errors if
+#                   combined with --format ncl/yaml/yml/toml,
+#                   because `jq -r` only understands JSON.
 #   --out FILE      Write output to FILE instead of stdout. If FILE
 #                   resolves to one of the inputs, error out
 #                   instead of clobbering.
@@ -59,6 +88,7 @@ set -euo pipefail
 
 KEEP=0
 FORMAT="ncl"
+RAW=0
 OUT=""
 NAMES=()
 PATHS=()
@@ -94,6 +124,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep)
       KEEP=1
+      shift
+      ;;
+    --raw)
+      RAW=1
       shift
       ;;
     --format)
@@ -260,15 +294,32 @@ WRAPPER="$(mktemp /tmp/nickel-run-XXXXXX.ncl)"
 # --- run ---
 
 # Map format aliases. yml → yaml; ncl → raw eval (no export).
+# env and bash are jq-based sinks (not nickel export formats) —
+# we still run `nickel export --format json` and pipe through jq.
 case "$FORMAT" in
   ncl)  EXPORT_FMT="" ;;
   yml)  EXPORT_FMT="yaml" ;;
   yaml|json|toml) EXPORT_FMT="$FORMAT" ;;
+  env|bash)  EXPORT_FMT="json" ;;  # format used internally; env/bash post-processed
   *)
-    echo "unknown format: $FORMAT (use ncl, json, yaml, yml, toml)" >&2
+    echo "unknown format: $FORMAT (use ncl, json, yaml, yml, toml, env, bash)" >&2
     exit 1
     ;;
 esac
+
+# --raw only makes sense over JSON (the format the shell sees after
+# the export). For ncl/yaml/yml/toml we'd need a format-specific
+# unquoter; the only case users actually hit is JSON scalars, so
+# we restrict to that.
+if [[ $RAW -eq 1 && "$EXPORT_FMT" != "json" ]]; then
+  echo "--raw requires --format json (got: $FORMAT)" >&2
+  echo "  --raw pipes through 'jq -r', which only understands JSON." >&2
+  exit 1
+fi
+if [[ $RAW -eq 1 ]] && ! command -v jq >/dev/null 2>&1; then
+  echo "--raw requires 'jq' on PATH" >&2
+  exit 1
+fi
 
 if command -v mise >/dev/null 2>&1; then
   NICKEL="mise exec -- nickel"
@@ -276,19 +327,84 @@ else
   NICKEL="nickel"
 fi
 
+# Format-specific post-processor applied AFTER nickel export and
+# AFTER --raw. Most formats are pass-through. env emits dotenv
+# format (KEY=VALUE per line, JSON-encoded values). Using --raw
+# with env is an error because the two are alternatives, not
+# composable: --raw flattens arrays to one-per-line, env keeps
+# the structure as quoted KEY=VALUE pairs.
+case "$FORMAT" in
+  env)
+    if [[ $RAW -eq 1 ]]; then
+      echo "--raw cannot be combined with --format env" >&2
+      echo "  env is already a flattened KEY=VALUE format." >&2
+      exit 1
+    fi
+    # Flatten any JSON value to KEY=VALUE per line, parseable by
+    # dotenv consumers (direnv, docker --env-file, etc.). Objects:
+    # KEY=VALUE per field. Arrays: INDEX=VALUE per element
+    # (0-indexed). Scalars: just the value on its own line. Nested
+    # values are JSON-encoded on the right-hand side so special
+    # characters don't break parsing. Not directly bash-sourceable
+    # for arrays — use --format bash for that.
+    POST='jq -r "if type == \"object\" then to_entries[] | \"\(.key)=\(.value | tojson)\" elif type == \"array\" then to_entries[] | \"\(.key)=\(.value | tojson)\" else . end"'
+    ;;
+  bash)
+    if [[ $RAW -eq 1 ]]; then
+      echo "--raw cannot be combined with --format bash" >&2
+      echo "  bash is already an unquoted, sourceable format." >&2
+      exit 1
+    fi
+    # Emit bash-sourceable output: KEY=VAL for scalars (unquoted
+    # when safe, single-quoted otherwise), KEY=(...) for arrays,
+    # and KEY=(["k"]="v" ...) for nested objects (declare -A is
+    # not assumed; bash 4+ associative arrays). Top-level scalars
+    # print on their own line. Indented with tabs for readability.
+    POST='jq -r "
+      def bashq: if type == \"string\" then
+        if test(\"^[A-Za-z0-9_./:,-]+$\") then . else \"\\\"\" + . + \"\\\"\" end
+      elif type == \"number\" or type == \"boolean\" then tostring
+      else tojson end;
+      def emit:
+        if type == \"object\" then
+          to_entries[] | \"\(.key)=\(if .value | type == \"array\" then \"(\" + ([.value[] | bashq] | join(\" \")) + \")\" elif .value | type == \"object\" then \"(\" + ([.value | to_entries[] | \"[\" + (.key | bashq) + \"]=\" + (.value | bashq)] | join(\" \")) + \")\" else .value | bashq end)\"
+        elif type == \"array\" then
+          to_entries[] | \"\(.key)=\(.value | bashq)\"
+        else .
+        end;
+      emit
+    "'
+    ;;
+  *)
+    POST=""
+    ;;
+esac
+
 RC=0
 if [[ -n "$OUT" ]]; then
   # Re-run to capture into the file. The pipe is small enough
   # that a second eval is simpler and avoids buffering edge
   # cases. When --out is given, suppress stdout.
   if [[ -n "$EXPORT_FMT" ]]; then
-    $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" > "$OUT" || RC=$?
+    if [[ -n "$POST" ]]; then
+      eval "$NICKEL eval \"$WRAPPER\" | $NICKEL export --format \"$EXPORT_FMT\" | $POST" "> \"$OUT\"" '|| RC=$?'
+    elif [[ $RAW -eq 1 ]]; then
+      $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" | jq -r 'if type == "array" then .[] else . end' > "$OUT" || RC=$?
+    else
+      $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" > "$OUT" || RC=$?
+    fi
   else
     $NICKEL eval "$WRAPPER" > "$OUT" || RC=$?
   fi
 else
   if [[ -n "$EXPORT_FMT" ]]; then
-    $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" || RC=$?
+    if [[ -n "$POST" ]]; then
+      eval "$NICKEL eval \"$WRAPPER\" | $NICKEL export --format \"$EXPORT_FMT\" | $POST" '|| RC=$?'
+    elif [[ $RAW -eq 1 ]]; then
+      $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" | jq -r 'if type == "array" then .[] else . end' || RC=$?
+    else
+      $NICKEL eval "$WRAPPER" | $NICKEL export --format "$EXPORT_FMT" || RC=$?
+    fi
   else
     $NICKEL eval "$WRAPPER" || RC=$?
   fi

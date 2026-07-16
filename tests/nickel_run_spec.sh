@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # tests/nickel_run_spec.sh — bash-spec 2.1 tests for the standalone
-# nickel-run.sh tool and the nickel-compose-run.sh wrapper.
+# nickel-run.sh tool.
 #
-# These tests exercise the wrapper mechanics in isolation, not
-# the merge engine. The engine is tested by merge_spec / schema_spec.
+# This spec is the conformance suite for the proposed native
+# `nickel run` subcommand (see docs/nickel-run.md and
+# nickel-lang/nickel#2636). It exercises the wrapper mechanics
+# in isolation — no merge engine involvement.
+#
+# The engine-binding layer (nickel-compose-run) has its own spec:
+# tests/nickel_compose_run_spec.sh.
 
 cd "$(dirname "$0")"
 
 . ./lib/bash-spec+file+jq.sh
 
 ROOT="$(cd .. && pwd)"
-NR="$ROOT/scripts/nickel-run.sh"
-NCR="$ROOT/scripts/nickel-compose-run.sh"
+NR="$ROOT/bin/nickel-run.sh"
 
 rm -rf out
 mkdir -p out
@@ -116,6 +120,134 @@ EOF
 EOF
     capture_run "$NR" --format toml "f=out/data.ncl" -- 'f'
     expect "$OUT" to_match 'name = "alice"'
+  }
+
+  it "--format env emits dotenv-style KEY=VALUE per line" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice", port = 8080 }
+EOF
+    capture_run "$NR" --format env "f=out/data.ncl" -- 'f'
+    expect "$OUT" to_match 'name='
+    expect "$OUT" to_match 'port='
+    expect "$OUT" to_match '8080'
+  }
+
+  it "--format env JSON-encodes nested arrays" && {
+    cat > "out/data.ncl" <<'EOF'
+{ tags = [ "admin", "ops" ] }
+EOF
+    capture_run "$NR" --format env "f=out/data.ncl" -- 'f'
+    expect "$OUT" to_match 'tags=\["admin","ops"\]'
+  }
+
+  it "--format bash emits sourceable bash syntax (record)" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice", port = 8080 }
+EOF
+    capture_run "$NR" --format bash "f=out/data.ncl" -- 'f'
+    expect "$OUT" to_match 'name=alice'
+    expect "$OUT" to_match 'port=8080'
+  }
+
+  it "--format bash emits sourceable bash arrays" && {
+    cat > "out/data.ncl" <<'EOF'
+{ tags = [ "admin", "ops" ] }
+EOF
+    capture_run "$NR" --format bash "f=out/data.ncl" -- 'f'
+    expect "$OUT" to_match 'tags=\(admin ops\)'
+  }
+
+  it "--format bash output is actually bash-sourceable" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice", port = 8080 }
+EOF
+    capture_run "$NR" --format bash --out "out/sourced.sh" "f=out/data.ncl" -- 'f'
+    # Source the file in a subshell and verify the variables
+    # landed in the environment. If quoting is wrong, this fails
+    # with an unset-variable or parse error.
+    captured="$(bash -c 'set -e; source out/sourced.sh; echo "${name}:${port}"')"
+    expect "$captured" to_be 'alice:8080'
+  }
+
+  it "--format bash quotes strings with spaces" && {
+    cat > "out/data.ncl" <<'EOF'
+{ greeting = "hello world" }
+EOF
+    capture_run "$NR" --format bash "f=out/data.ncl" -- 'f'
+    expect "$OUT" to_match 'greeting="hello world"'
+  }
+
+  it "--raw rejects --format env" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice" }
+EOF
+    capture_run "$NR" --format env --raw "f=out/data.ncl" -- 'f'
+    should_fail
+    expect "$ERR" to_match '--raw cannot be combined with --format env'
+  }
+
+  it "--raw rejects --format bash" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice" }
+EOF
+    capture_run "$NR" --format bash --raw "f=out/data.ncl" -- 'f'
+    should_fail
+    expect "$ERR" to_match '--raw cannot be combined with --format bash'
+  }
+
+  it "--raw strips quotes from a scalar result (json)" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice", port = 8080 }
+EOF
+    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.name'
+    expect "$OUT" to_be 'alice'
+    expect "$OUT" to_not_match '"'
+  }
+
+  it "--raw prints one element per line for an array of scalars" && {
+    cat > "out/data.ncl" <<'EOF'
+{ items = [ "alpha", "beta", "gamma" ] }
+EOF
+    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.items'
+    expect "$OUT" to_be 'alpha
+beta
+gamma'
+  }
+
+  it "--raw leaves records unchanged (keys are required JSON)" && {
+    cat > "out/data.ncl" <<'EOF'
+{ services = { web = { image = "nginx" } } }
+EOF
+    capture_run "$NR" --format json --raw "f=out/data.ncl" -- 'f.services'
+    expect "$OUT" to_match '"web"'
+    expect "$OUT" to_match '"image"'
+    expect "$OUT" to_match '"nginx"'
+  }
+
+  it "--raw works with --out" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice" }
+EOF
+    capture_run "$NR" --format json --raw --out "out/raw-name.txt" "f=out/data.ncl" -- 'f.name'
+    expect "$(cat out/raw-name.txt)" to_be 'alice'
+  }
+
+  it "--raw rejects --format yaml (jq -r only understands JSON)" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice" }
+EOF
+    capture_run "$NR" --format yaml --raw "f=out/data.ncl" -- 'f.name'
+    should_fail
+    expect "$ERR" to_match '--raw requires --format json'
+  }
+
+  it "--raw rejects --format ncl (no export, no jq pipeline)" && {
+    cat > "out/data.ncl" <<'EOF'
+{ name = "alice" }
+EOF
+    capture_run "$NR" --raw "f=out/data.ncl" -- 'f.name'
+    should_fail
+    expect "$ERR" to_match '--raw requires --format json'
   }
 
   it "--out writes to a file and suppresses stdout" && {
@@ -261,47 +393,5 @@ EOF
     should_fail
     # The wrapper path is printed so the user can inspect.
     expect "$ERR" to_match "wrapper kept for debugging:"
-  }
-}
-
-describe "nickel-compose-run.sh wrapper" && {
-  it "pre-loads the engine as the free identifier 'compose'" && {
-    cat > "out/empty.ncl" <<'EOF'
-[]
-EOF
-    capture_run "$NCR" "fragments=out/empty.ncl" -- \
-      'std.record.has_field "merge" compose'
-    expect "$OUT" to_match '^true$'
-  }
-
-  it "sets NICKEL_IMPORT_PATH so the engine resolves" && {
-    cat > "out/empty.ncl" <<'EOF'
-[]
-EOF
-    # Force unset for this command; mise exec propagates it from
-    # the calling shell, so use env -u to ensure it's gone.
-    capture_run env -u NICKEL_IMPORT_PATH "$NCR" "fragments=out/empty.ncl" -- \
-      'compose.version'
-    expect "$OUT" to_match '"0.2.0"'
-  }
-
-  it "supports the standard 'use' expression: merge_with_source" && {
-    cat > "out/fraglist.ncl" <<'EOF'
-[ { services = { web = { image = "nginx" } } } ]
-EOF
-    capture_run "$NCR" "fragments=out/fraglist.ncl" -- \
-      'std.array.length (std.record.fields (compose.merge_with_source fragments _paths.fragments).services)'
-    expect "$OUT" to_match '^1$'
-  }
-
-  it "default format is ncl (raw eval); --format yaml converts" && {
-    cat > "out/fraglist.ncl" <<'EOF'
-[ { services = { web = { image = "nginx" } } } ]
-EOF
-    capture_run "$NCR" "fragments=out/fraglist.ncl" -- \
-      'compose.merge_with_source fragments _paths.fragments'
-    # Default: nickel record syntax (not yaml).
-    expect "$OUT" to_match 'services ='
-    expect "$OUT" to_match 'image = "nginx"'
   }
 }

@@ -236,13 +236,14 @@ The dispatcher is `bin/nickel-compose`. It execs
 discovered dynamically by name (no hardcoded list). The
 implementation is two layers:
 
-- **`scripts/nickel-run.sh`** — pure, generic. Takes
+- **`bin/nickel-run.sh`** — pure, generic. Takes
   `NAME=PATH... -- EXPRESSION`, builds a temp wrapper that
   imports each input, evaluates the expression with each `NAME`
   bound as a free identifier and a `paths` record in scope for
   the source path. Does NOT touch `NICKEL_IMPORT_PATH`.
-  Reusable outside this project.
-- **`scripts/nickel-compose-run.sh`** — thin convenience
+  Reusable outside this project. Lives in `bin/` (not `scripts/`)
+  because it's a generic tool, not a domain helper.
+- **`bin/nickel-compose-run.sh`** — thin convenience
   layer over `nickel-run.sh`. Pre-binds the engine as
   `compose` (free identifier, no `run.` prefix) and sets
   `NICKEL_IMPORT_PATH` to the engine's parent dir. This is

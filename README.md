@@ -62,6 +62,9 @@ nickel export --format yaml examples/podclaws/config.ncl > compose.yaml
 
 See [docs/testing.md](docs/testing.md) for the spec/test suite and how
 to add tests.
+See [docs/nickel-run.md](docs/nickel-run.md) for the `nickel-run` wrapper
+spec — a generic Nickel invocation tool that doubles as a proposal for
+a native `nickel run` subcommand (see [nickel-lang/nickel#2636](https://github.com/nickel-lang/nickel/issues/2636)).
 
 ## How it works
 
@@ -254,9 +257,17 @@ round-trip through podman-compose, schema contracts, the
 ```
 nickel-compose/
 ├── nickel-compose.ncl          # merge engine (single file, drop-in)
+├── bin/
+│   ├── nickel-compose           # dispatcher (execs bin/nickel-compose-<verb>.sh)
+│   ├── nickel-compose-use.sh    # render config to compose.yaml
+│   ├── nickel-compose-check.sh  # typecheck
+│   ├── nickel-compose-report.sh # query the merged record
+│   ├── nickel-compose-schema.sh # show a contract's fields
+│   ├── nickel-compose-help.sh   # this message
+│   ├── nickel-compose-run.sh    # thin wrapper: pre-loads the engine, calls nickel-run
+│   └── nickel-run.sh            # generic nickel invocation wrapper
 ├── scripts/
 │   ├── dc2nc.sh                 # fragment picker (stdin or --find-all) → bare-list config.ncl
-│   ├── find-fragments.sh        # discover compose fragments in a tree
 │   ├── to-compose.sh            # config.ncl → compose.ncl + compose.yaml (with schema check)
 │   └── check.sh                 # strict typecheck (engine + optional user config)
 ├── examples/
@@ -274,6 +285,7 @@ nickel-compose/
 │   ├── design.md               # design rationale
 │   ├── workflow.md             # central workflow + migration paths
 │   ├── schema.md               # contracts, check, merge_with_check
+│   ├── nickel-run.md           # nickel-run wrapper spec (proposed upstream API)
 │   └── testing.md              # test suite, golden-file testing
 ├── mise/
 │   ├── config.toml             # tools (nickel, jq) + task config
@@ -281,19 +293,20 @@ nickel-compose/
 │       ├── check               # typecheck the engine and user config
 │       ├── render              # render config to compose.yaml
 │       └── test                # run the bash-spec test suite
-├── bin/
-│   ├── nickel-compose           # dispatcher (execs bin/nickel-compose-<verb>.sh)
-│   ├── nickel-compose-use.sh    # render config to compose.yaml
-│   ├── nickel-compose-check.sh  # typecheck
-│   ├── nickel-compose-fragments.sh  # discover fragments
-│   ├── nickel-compose-report.sh # query the merged record
-│   ├── nickel-compose-schema.sh # show a contract's fields
-│   └── nickel-compose-help.sh   # this message
-├── nickel-compose.ncl          # merge engine (single file, drop-in)
 ├── README.md
 ├── LICENSE
 └── .gitignore
 ```
+
+The dispatcher (`bin/nickel-compose`) shells out to `bin/nickel-compose-<verb>.sh`;
+the verb scripts call the lower-level helpers in `scripts/` (e.g.
+`nickel-compose-use.sh` calls `to-compose.sh`, which calls
+`bin/nickel-compose-run.sh`, which calls `bin/nickel-run.sh`). Verb
+scripts and the engine-bound/generic run tools live in `bin/`;
+domain helpers (the `to-compose.sh` render pipeline, `dc2nc.sh`
+picker, strict typecheck) live in `scripts/`. Don't move a script
+between `bin/` and `scripts/` without also updating the tests that
+reference it by path.
 
 ## License
 
