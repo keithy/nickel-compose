@@ -113,10 +113,11 @@ want to add your own custom checks on top of the engine's.
 
 Schema validation runs as part of the merge — the report lands in
 `x-check` on the rendered artifact. `use` does not act on the
-result; tooling reads `x-check.ok` directly when it wants to
-enforce. This separates rendering from validation: a CI step can
-fail on `x-check.ok == false` without coupling to the render
-itself.
+result. To enforce the schema, run `nickel-compose verify` (which
+reads `x-check.ok` and exits 0/1/2) or read the field directly
+from the rendered artifact. This separates rendering from
+validation: a CI step can fail on `x-check.ok == false` without
+coupling to the render itself.
 
 For configs that use plain `composer.merge` (not
 `composer.merge_fully_validate`), the schema validator is not
@@ -223,4 +224,5 @@ have happened at `up` time.
 |---|---|
 | `nickel-compose.ncl` | Renamed `merge_with_check` + `merge_with_source` to single `merge_fully_validate`. Removed the intermediate `merge_with_check` entry point; one validated merge, explicit source. Bumped version to 0.3.0. |
 | `bin/nickel-compose-use.sh` | Absorbed `scripts/to-compose.sh`. Pure render — runs the merge with `merge_fully_validate`, writes `compose.ncl` + `compose.yaml`, exits 0 on success. No exit-code mapping for schema errors; `x-check.ok` is recorded in the artifact for tooling. |
+| `bin/nickel-compose-verify.sh` | New verb. Reads `x-check` from a rendered `compose.ncl` and exits 0/1/2 by ok/missing-or-error/file-or-field-absent. CI hook for enforcing the schema without coupling to the render itself. |
 | `tests/schema_spec.sh` | Updated for the new function name and signature. Renamed the `to-compose.sh integration` describe block to `use verb integration`; the "schema failure exits 1" test now confirms `use` exits 0 but `x-check.ok = false` in the artifact. |

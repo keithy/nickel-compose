@@ -6,12 +6,15 @@ A deployment in nickel-compose is one `config.ncl` file that
 renders to one `compose.yaml`. The flow is:
 
 ```
-config.ncl   ──[nickel-compose use]──>   compose.yaml   ──[podman compose]──>   containers
+config.ncl   ──[nickel-compose use]──>   compose.{ncl,yaml}   ──[verify]──>   ok?
+                                                            ──[podman compose]──>   containers
 ```
 
 `compose.yaml` is the merged record — auto-picked by
 `podman-compose` and `docker compose` at deploy time, so no `-f`
-flag is needed.
+flag is needed. `verify` is optional in the happy path; it's the
+CI hook that fails the build on `x-check.ok == false` without
+coupling the render itself to schema enforcement.
 
 To create a new deployment:
 
