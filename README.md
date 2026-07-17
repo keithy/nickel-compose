@@ -265,10 +265,10 @@ nickel-compose/
 │   ├── nickel-compose-schema.sh # show a contract's fields
 │   ├── nickel-compose-help.sh   # this message
 │   ├── nickel-compose-run.sh    # thin wrapper: pre-loads the engine, calls nickel-run
-│   └── nickel-run.sh            # generic nickel invocation wrapper
+│   ├── nickel-run.sh            # generic nickel invocation wrapper
+│   └── nickel-compose-check.sh  # strict typecheck (engine + optional user config)
 ├── scripts/
-│   ├── dc2nc.sh                 # fragment picker (stdin or --find-all) → bare-list config.ncl
-│   └── check.sh                 # strict typecheck (engine + optional user config)
+│   └── dc2nc.sh                 # fragment picker (stdin or --find-all) → bare-list config.ncl
 ├── examples/
 │   ├── dummy-project/          # self-contained first-time-user example
 │   └── podclaws/               # example using real podclaws fragments
@@ -300,9 +300,9 @@ nickel-compose/
 The dispatcher (`bin/nickel-compose`) shells out to `bin/nickel-compose-<verb>.sh`;
 verb scripts call `bin/nickel-compose-run.sh` for the merge, which
 calls `bin/nickel-run.sh` for the eval. Domain helpers (`dc2nc.sh`
-fragment picker, `check.sh` strict typecheck) live in `scripts/`.
-Don't move a script between `bin/` and `scripts/` without also
-updating the tests that reference it by path.
+fragment picker) live in `scripts/`. Don't move a script between
+`bin/` and `scripts/` without also updating the tests that
+reference it by path.
 
 ## License
 

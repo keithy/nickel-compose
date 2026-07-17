@@ -127,7 +127,7 @@ semantics with no validation overhead.
 
 ## Strict typecheck: `mise run check`
 
-`mise run check` (or `./scripts/check.sh`) runs
+`mise run check` (or `nickel-compose check`) runs
 `nickel typecheck` on the engine and (optionally) a user
 `config.ncl`. The user-config argument is passed through:
 

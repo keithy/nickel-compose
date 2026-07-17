@@ -3,7 +3,7 @@
 #MISE raw=true
 # Resolve symlinks so the path works whether or not the mise
 # tasks dir is reached via a symlink. The task is at
-# <repo>/mise/tasks/check, and scripts/check.sh lives at
-# <repo>/scripts/check.sh — two `..` up.
+# <repo>/mise/tasks/check, and bin/nickel-compose-check.sh lives
+# at <repo>/bin/nickel-compose-check.sh — two `..` up.
 TASK_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-"$TASK_DIR/../../scripts/check.sh" "$@"
+"$TASK_DIR/../../bin/nickel-compose-check.sh" "$@"

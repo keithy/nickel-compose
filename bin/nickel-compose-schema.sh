@@ -17,8 +17,8 @@ fi
 contract="$1"
 field="${2:-}"
 
-# Locate the engine. Same search order as check.sh and
-# nickel-compose-run.sh.
+# Locate the engine. Same search order as nickel-compose-check.sh
+# and nickel-compose-run.sh.
 ENGINE="${NICKEL_COMPOSE_ENGINE:-}"
 if [[ -z "$ENGINE" ]]; then
   for candidate in \
