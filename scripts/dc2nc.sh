@@ -77,8 +77,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#picks[@]} -eq 0 ]]; then
-  echo "$script_name: at least one --pick PATH is required" >&2
-  echo "  e.g. $script_name --pick base.yml --pick services/web.yml" >&2
+  echo "$script_name: at least one fragment path is required" >&2
+  echo "  e.g. $script_name --find-all --pick base.yml" >&2
+  echo "  run '$script_name --help' for usage" >&2
   exit 1
 fi
 
