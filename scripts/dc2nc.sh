@@ -16,16 +16,14 @@
 #
 # Usage:
 #   find . -name '*.yml' | dc2nc.sh --pick base.yml > config.ncl
-#   find . \( -name '*.yml' -o -name '*.ncl' \) \
-#     | dc2nc.sh --pick base.yml --pick services/web.yml > config.ncl
 #   dc2nc.sh --find-all --pick base.yml > config.ncl
 #   dc2nc.sh --find-all base.yml services/web.yml > config.ncl
 #
 # Options:
 #   --pick PATH     include fragments whose path equals PATH (repeatable).
 #                   Bare positional args are treated the same as --pick PATH.
-#   --find-all      run `find . \( -name '*.yml' -o -name '*.ncl' \)`
-#                   instead of reading from stdin
+#   --find-all      run `find . -name '*.yml'` instead of reading
+#                   from stdin
 #   -h, --help      show this help
 #
 # The caller is expected to be cd'd into the project root.
@@ -55,7 +53,13 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --pick)
       [[ $# -ge 2 ]] || { echo "$script_name: --pick requires a value" >&2; exit 1; }
-      picks+=("$2")
+      # Colon-separated lists are the docker-compose convention
+      # (COMPOSE_FILE=base.yml:overlays/dev.yml). Split on `:` so
+      # users can paste a COMPOSE_FILE value directly.
+      IFS=: read -ra parts <<< "$2"
+      for part in "${parts[@]}"; do
+        [[ -n "$part" ]] && picks+=("$part")
+      done
       shift 2
       ;;
     --find-all)
@@ -86,14 +90,23 @@ fi
 # --- collect candidates ---
 #
 # Discovery sources, in order of preference:
-#   1. --find-all: run `find . \( -name '*.yml' -o -name '*.ncl' \)` itself
+#   1. --find-all: run `find . -name '*.yml'` itself
 #   2. stdin: read paths (one per line), ignoring blanks
 #   3. fallback: if stdin is empty AND --find-all is unset, run `find` too.
 #      This lets `dc2nc.sh --pick base.yml` (no pipe) work — same
 #      behaviour as `--find-all --pick base.yml`.
 
 if [[ $find_all -eq 1 ]]; then
-  candidates="$(find . \( -name '*.yml' -o -name '*.ncl' \) -not -path './out/*' \
+  candidates="$(find . -name '*.yml' \
+    -not -path '*/.*' \
+    -not -path './out/*' \
+    -not -path '*/out/*' \
+    -not -path './tests/*' \
+    -not -path '*/tests/*' \
+    -not -path './nickel-compose/*' \
+    -not -path '*/nickel-compose/*' \
+    -not -name '*.bak' \
+    -not -name '*.example' \
     | sed 's|^\./||')"
 else
   if [[ -t 0 ]]; then
@@ -105,7 +118,16 @@ else
   if [[ -z "$candidates" ]]; then
     # Empty stdin — fall back to discovery so the picker still works
     # for the common `dc2nc.sh --pick foo.yml` case.
-    candidates="$(find . \( -name '*.yml' -o -name '*.ncl' \) -not -path './out/*' \
+    candidates="$(find . -name '*.yml' \
+      -not -path '*/.*' \
+      -not -path './out/*' \
+      -not -path '*/out/*' \
+      -not -path './tests/*' \
+      -not -path '*/tests/*' \
+      -not -path './nickel-compose/*' \
+      -not -path '*/nickel-compose/*' \
+      -not -name '*.bak' \
+      -not -name '*.example' \
       | sed 's|^\./||')"
   fi
 fi
