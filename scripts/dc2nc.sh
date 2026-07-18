@@ -96,6 +96,9 @@ if [[ $find_all -eq 1 ]]; then
   candidates="$(find . \( -name '*.yml' -o -name '*.ncl' \) -not -path './out/*' \
     | sed 's|^\./||')"
 else
+  if [[ -t 0 ]]; then
+    echo "$script_name: reading candidate paths from stdin (Ctrl-D to finish, or use --find-all)" >&2
+  fi
   candidates="$(cat \
     | sed 's|^\./||' \
     | sed '/^$/d')"
